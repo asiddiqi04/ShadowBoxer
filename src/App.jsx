@@ -1,6 +1,7 @@
 import Timer from './components/Timer';
 import ComboDisplay from './components/ComboDisplay';
 import PoseDetector from './components/PoseDetector';
+import PoseDetectorBlaze from './components/PoseDetectorBlaze';
 import { useState } from 'react';
 
 function App() {
@@ -24,7 +25,8 @@ function App() {
           setIsRunning={setIsRunning}
         />
         <ComboDisplay isRunning={isRunning} />
-        <PoseDetector isRunning={isRunning} />
+        {/* <PoseDetector isRunning={isRunning} /> */}
+        <PoseDetectorBlaze isRunning={isRunning} />
 
         
       </div>
