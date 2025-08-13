@@ -17,7 +17,7 @@
 | Layer        | Technology                        |
 |--------------|------------------------------------|
 | Frontend     | **React**, **Vite**, **Tailwind CSS** |
-| Pose Detection | **TensorFlow MoveNet**             |
+| Pose Detection | **TensorFlow BlazePose**             |
 | Logic & State | **JavaScript**, **React Hooks**     |
 
 ---
@@ -25,6 +25,6 @@
 ## 🧪 In Development
 
 - ⏱️ Round timer
-- 👊 Additional punch types (cross, hook, uppercut)
+- 👊 Additional punch types (cross, hook, uppercut, etc.)
 - 🎯 Combo recognition and feedback
 - 📊 Punch history, scoring, and performance stats
