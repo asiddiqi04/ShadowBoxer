@@ -7,10 +7,39 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+punch_training_orthodox/
+
+# Local recordings, tuning tools, and generated reports
+*.mp4
+*.mov
+*.webm
+boxing-*.json
+reports/
+README.local.md
+scripts/*.test.mjs
+scripts/convert-labels.mjs
+scripts/replay-recording.mjs
+scripts/evaluate-predictions.mjs
+backend/src/**/*.test.js
+backend/src/training/fixtures/
+backend/src/training/recordingLabels.js
+
+# Local agent tooling and design notes
+.codex/
+openspec/
+
+# Local environment settings (examples may be committed)
+.env
+.env.*
+!.env.example
+
 node_modules
 dist
 dist-ssr
+frontend/public/models/blazepose/
 *.local
+database/data/*.sqlite
+database/data/*.sqlite-*
 
 # Editor directories and files
 .vscode/*
