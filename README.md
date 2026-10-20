@@ -1,60 +1,109 @@
 # ShadowBoxer
 
-A local boxing trainer with webcam pose tracking, jab/cross/hook/uppercut classification, timed combo drills, session history, and MP4 recording with pose-landmark exports. The current stance is orthodox: left jab and right cross.
+ShadowBoxer turns a webcam into an interactive boxing trainer. Practice orthodox jabs, crosses, hooks, and uppercuts, follow rotating combos, and track your rounds with pose detection that runs entirely in your browser.
 
-This is an in-progress local prototype built with React, Vite, Tailwind CSS, TensorFlow.js/BlazePose, Express, and SQLite.
+## Features
 
-## Requirements
+- Real-time pose tracking and punch feedback, with separate sounds for registered punches and incorrect combo moves.
+- Three-minute rounds with Form, Casual, and Intense pacing, plus pause, resume, and reset controls.
+- Combo progress, punch counts, and workout summaries saved locally in your browser.
+- Automatic pause when the tab is hidden or tracking becomes unavailable, with camera and model recovery controls.
+- Optional local recordings with video, landmark data, and a blank labeling template for reviewing movement.
 
-- Node.js 22.12 or newer in the Node 22 series and npm (`.nvmrc` selects Node 22).
-- A webcam and a browser with WebGL enabled. Chrome is the recommended starting point. Recording also requires H.264 MP4 support in the browser.
-- Internet access to install dependencies and download the pose models on the first start/build.
-- Bash, `curl`, and `tar` for the startup/model setup scripts. These are available on macOS and commonly on Linux. On Windows, use WSL for the development commands.
+No account, backend server, database service, or environment variables are required.
 
-## Clone and run
+## Run locally
 
-```bash
-git clone https://github.com/asiddiqi04/ShadowBoxer.git
-cd ShadowBoxer
-# If you use nvm:
-nvm install
+Use a recent **Node.js 22** release (22.12 or later), npm, `curl`, and `tar`.
+
+```sh
 nvm use
 npm ci
 npm run dev
 ```
 
-If Node 22 is already installed without nvm, skip the two nvm commands.
+Open the URL printed by Vite and allow camera access. Start a round once the camera and pose model are ready. A modern browser with WebGL is required. Camera access requires HTTPS on public hosts; localhost also works.
 
-Open **http://localhost:5173** and allow camera access. The launcher starts both the frontend and the backend (http://localhost:3001). Choose **Form**, **Casual**, or **Intense**, then start a round. Stop the launcher with Ctrl+C.
+Development and production builds automatically download two pinned BlazePose model archives and verify their SHA-256 checksums. The first run needs internet access. Subsequent runs verify cached archives in `.cache/pose-models/`; model weights and build output are generated, not committed. If an archive is corrupt, remove `.cache/pose-models/` and run `npm run models:prepare` again.
 
-The first start downloads checksum-verified BlazePose files into `frontend/public/models/blazepose/`. Later starts use the local copies. Pose estimation runs in the browser; extracted landmarks go to the local backend for punch classification and combo tracking. There is no external AI inference API or API key to configure.
+## Development and validation
 
-If the model download fails, run `npm run models:prepare` and try again. For browser model errors, check graphics acceleration/WebGL and use **Retry model** in the app.
+```sh
+npm run format:check     # Check formatting; use npm run format to apply it
+npm run lint             # Frontend, scripts, and tests
+npm test                 # Classifier, combos, timers, storage, recordings, model setup
+npm run build            # Production output: frontend/dist
+npm run preview          # Preview the production build locally
+```
 
-## Commands
+The production browser suite starts its own static server and uses a synthetic camera with the real pose models:
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the frontend and backend together |
-| `npm run dev:frontend` | Start only the Vite frontend |
-| `npm run dev:backend` | Start only the Node backend |
-| `npm run models:prepare` | Download/check the required pose models |
-| `npm run lint` | Check frontend and backend source |
-| `npm run build` | Build the frontend into `frontend/dist/`, including models |
+```sh
+npx playwright install chromium
+npm run test:browser
+```
 
-The Vite development server proxies `/api` to localhost:3001. A production deployment must provide an API URL through `VITE_API_BASE_URL` at build time or route `/api` to the backend. A frontend build alone does not start the backend or provide session storage.
+Run `npm run build` first. On Linux, use `npx playwright install --with-deps chromium` to install browser system dependencies too. Set `CHROME_PATH` to use an existing Chrome executable. For an actual three-minute offline round and recording-limit check, run `FULL_ROUND_SMOKE=1 npm run test:browser`. The default suite accelerates the round clock.
 
-## Project layout
+GitHub Actions runs formatting, lint, unit tests, a production build, and the browser suite on Ubuntu with Node 22. Automated camera tests do not replace testing real punches and audio on physical devices. An optional synthetic classifier benchmark is available with `npm run benchmark`.
 
-- `frontend/`: React/Vite UI, webcam capture, BlazePose, and recording/export.
-- `backend/`: Express API, geometric classifiers, speed profiles, round/combination logic, and session storage.
-- `database/schema.sql`: SQLite schema used to create a fresh local database automatically.
-- `scripts/`: local launcher and model setup.
+## Stack and structure
 
-Sessions are stored in `database/data/sessions.sqlite`, which is created on first backend startup. Each clone starts with an empty history. The database, dependencies, generated builds, model downloads, personal recordings, and internal tuning/test tools are not included in the repository. The current backend maintains one active round and is intended for one local user at a time.
+| Layer                | Technology                                     |
+| -------------------- | ---------------------------------------------- |
+| Interface            | React 19, Tailwind CSS 4                       |
+| Build                | Vite 7, npm workspaces                         |
+| Pose detection       | TensorFlow.js, BlazePose, WebGL                |
+| Browser capabilities | IndexedDB, Web Audio, MediaRecorder            |
+| Validation           | ESLint, Prettier, Node test runner, Playwright |
+| Hosting              | Static frontend on Vercel                      |
 
-## Recording punches
+```text
+frontend/
+  src/
+    assets/sounds/     Punch and incorrect-combo audio
+    components/       Camera, round controls, combos, recordings, history
+    hooks/            Audio playback
+    lib/              Model configuration, recording exports, local persistence
+    training/         Punch classifier, combo rules, speed profiles, round engine
+scripts/              Model preparation, browser checks, static test server, benchmark
+tests/                Automated unit and integration tests
+.github/workflows/    Continuous integration
+vercel.json           Build settings and response headers
+```
 
-Wait for the model to load, then select **Record punches**. Recording works with or without a running round. Stop recording and download the MP4 video, landmark JSON, and label template before leaving the page. Recordings are unmirrored, contain no audio, and stop automatically after three minutes.
+The round engine is independent of React and persistence. Camera landmarks feed the classifier locally; React displays the round state. Completed summaries are saved to IndexedDB, and failed saves can be retried without duplicating a workout.
 
-The label template uses 30 FPS video frame numbers, starting at frame 0. Label either a moment (`frame`) or an interval (`startFrame` and `endFrame`), along with `type` (`jab`, `cross`, `hook`, or `uppercut`) and your anatomical `side` (`left` or `right`). Video frames and pose-inference samples have different rates; do not use the landmarks array index as a video frame number.
+All four public scripts have a purpose: `prepare-pose-models.mjs` is required by development and builds, `browser-smoke.mjs` validates the production app, `static-server.mjs` serves that build for tests, and `benchmark-classifier.mjs` measures classifier performance without recordings.
+
+## Privacy and browser storage
+
+Camera frames, landmarks, and recordings stay on your device. Pose models are served from the app's own origin. The interface loads display fonts from Google Fonts.
+
+History belongs to the current browser and site origin; it is not synced or backed up. Clearing site data, private browsing cleanup, or browser eviction can remove it. Unfinished rounds and unsaved results do not survive refresh. Download recording exports before leaving the page. Different Vercel preview domains have separate histories.
+
+Recordings are silent and limited to three minutes. Supported browsers use H.264 MP4, with a labeled WebM fallback; training still works if recording is unavailable. The exported video is unmirrored. Landmark timestamps describe inference samples, not encoded video frames. The labeling template uses a 30 FPS timebase: convert video to constant 30 FPS before labeling, and verify its alignment with the landmarks.
+
+## Deploy to Vercel
+
+Import this repository using these settings. Keep the **Root Directory at the repository root**, because the workspace build needs the root scripts and lockfile.
+
+| Setting               | Value                 |
+| --------------------- | --------------------- |
+| Framework Preset      | Vite                  |
+| Root Directory        | Repository root (`.`) |
+| Install Command       | `npm ci`              |
+| Build Command         | `npm run build`       |
+| Output Directory      | `frontend/dist`       |
+| Node.js Version       | 22.x                  |
+| Environment variables | None                  |
+
+`vercel.json` sets the commands, output directory, security headers, and caching. Hashed assets use immutable caching; model files revalidate. Missing assets return 404. The build needs access to npm and Kaggle to download dependencies and the checksum-pinned model archives.
+
+1. Create an HTTPS preview deployment and confirm both models load with a fresh browser cache.
+2. Test a real camera and audio, all four punches, each pace, combos, pause/resume/reset, and a full round. Check history after refresh and recording downloads. Verify hidden-tab pause and recovery after denying camera access or interrupting model loading.
+3. Test desktop Chromium, Safari/iOS, and Android Chrome before promoting the preview to production. After models load, verify a round also works offline.
+
+Vercel's deployment history can restore a previous frontend release. Browser data is separate from deployments, so keep IndexedDB schema compatibility in mind when rolling back.
+
+See the official [Vite deployment guide](https://vercel.com/docs/frameworks/frontend/vite), [project configuration reference](https://vercel.com/docs/project-configuration/vercel-json), and [Node.js version settings](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).

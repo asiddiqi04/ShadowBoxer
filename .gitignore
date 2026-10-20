@@ -1,53 +1,79 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Dependencies and generated builds
+node_modules/
+dist/
+dist-ssr/
+frontend/public/models/blazepose/
+.cache/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
 
-punch_training_orthodox/
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+.npmrc
+.vercel/
+.aws/
+*.local
+*.pem
+*.key
 
-# Local recordings, tuning tools, and generated reports
+# Local recordings and generated training data
 *.mp4
 *.mov
 *.webm
 boxing-*.json
+punch_training_orthodox/
 reports/
-README.local.md
-scripts/*.test.mjs
-scripts/convert-labels.mjs
-scripts/replay-recording.mjs
-scripts/evaluate-predictions.mjs
-backend/src/**/*.test.js
-backend/src/training/fixtures/
-backend/src/training/recordingLabels.js
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
-# Local agent tooling and design notes
+# Retired implementation and local replay tools (kept on disk)
+/backend/
+/database/
+/scripts/dev.sh
+/scripts/convert-labels.mjs
+/scripts/replay-recording.mjs
+/scripts/evaluate-predictions.mjs
+/scripts/recording.test.mjs
+/scripts/evaluate-predictions.test.mjs
+/frontend/src/App.css
+/frontend/src/lib/api.js
+/frontend/src/assets/sounds/incorrect-punch-1.mp3
+/frontend/src/assets/sounds/incorrect-punch-2.mp3
+/frontend/src/assets/sounds/incorrect-punch-4.mp3
+
+# Internal notes and agent tooling; public documentation belongs in README.md
+/docs/validation.md
+/docs/public-readiness-review.md
+/docs/proposed-commit-files.txt
+/ShadowBoxer-Codex-Deployment-Plan.md
+/README.local.md
 .codex/
+.agents/
 openspec/
 
-# Local environment settings (examples may be committed)
-.env
-.env.*
-!.env.example
-
-node_modules
-dist
-dist-ssr
-frontend/public/models/blazepose/
-*.local
-database/data/*.sqlite
-database/data/*.sqlite-*
-
-# Editor directories and files
+# Logs, temporary files, and editor metadata
+logs/
+*.log
+*.tmp
+*.swp
+*.swo
+*~
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?

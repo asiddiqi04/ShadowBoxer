@@ -1,20 +1,21 @@
-export const ROUND_SECONDS = 180;
+export const ROUND_SECONDS = 180
 
 const speeds = [
   { value: 'form', label: 'Form rounds', pace: 'Slow' },
   { value: 'casual', label: 'Casual', pace: 'Medium' },
   { value: 'intense', label: 'Intense', pace: 'Fast' },
-];
+]
 
 const formatTime = (seconds) => {
-  const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const secs = String(seconds % 60).padStart(2, '0');
-  return `${mins}:${secs}`;
-};
+  const mins = String(Math.floor(seconds / 60)).padStart(2, '0')
+  const secs = String(seconds % 60).padStart(2, '0')
+  return `${mins}:${secs}`
+}
 
 function Timer({
   round,
   disabled = false,
+  canStart = true,
   selectedSpeed = 'casual',
   onSpeedChange,
   onRoundEnd,
@@ -23,25 +24,32 @@ function Timer({
   onRoundResume,
   onRoundStart,
 }) {
-  const status = round?.status ?? 'ready';
-  const isRunning = round?.isRunning ?? false;
-  const durationSeconds = round?.durationSeconds ?? ROUND_SECONDS;
-  const timeLeft = round?.timeLeftSeconds ?? durationSeconds;
-  const hasStarted = Boolean(round?.startedAt) && status !== 'ready';
-  const progressPercent = Math.max(0, Math.min(100, (timeLeft / durationSeconds) * 100));
+  const status = round?.status ?? 'ready'
+  const isRunning = round?.isRunning ?? false
+  const durationSeconds = round?.durationSeconds ?? ROUND_SECONDS
+  const timeLeft = round?.timeLeftSeconds ?? durationSeconds
+  const hasStarted = Boolean(round?.startedAt) && status !== 'ready'
+  const progressPercent = Math.max(
+    0,
+    Math.min(100, (timeLeft / durationSeconds) * 100),
+  )
   const statusText = isRunning
     ? 'Live'
     : status === 'paused'
       ? 'Paused'
       : status === 'ended'
         ? 'Done'
-        : 'Ready';
+        : 'Ready'
 
   return (
     <section className="panel-card p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs uppercase tracking-[0.2em] text-cyan-100/85">Round Clock</p>
-        <span className={`status-pill ${isRunning ? 'status-pill-live' : 'status-pill-idle'}`}>
+        <p className="text-xs uppercase tracking-[0.2em] text-cyan-100/85">
+          Round Clock
+        </p>
+        <span
+          className={`status-pill ${isRunning ? 'status-pill-live' : 'status-pill-idle'}`}
+        >
           {statusText}
         </span>
       </div>
@@ -61,9 +69,11 @@ function Timer({
         />
       </div>
 
-      {(status === 'ready' || status === 'ended' || !hasStarted) ? (
+      {status === 'ready' || status === 'ended' || !hasStarted ? (
         <fieldset disabled={disabled} className="mt-5">
-          <legend className="text-xs uppercase tracking-[0.15em] text-cyan-100/85">Round speed</legend>
+          <legend className="text-xs uppercase tracking-[0.15em] text-cyan-100/85">
+            Round speed
+          </legend>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {speeds.map((speed) => (
               <label key={speed.value} className="cursor-pointer">
@@ -82,18 +92,31 @@ function Timer({
               </label>
             ))}
           </div>
-          <p className="mt-2 text-xs text-slate-400">Choose your pace before starting the round.</p>
+          <p className="mt-2 text-xs text-slate-400">
+            Choose your pace before starting the round.
+          </p>
         </fieldset>
       ) : (
         <p className="mt-4 text-sm text-cyan-100">
-          {speeds.find((speed) => speed.value === round.speed)?.label ?? 'Casual'} pace
+          {speeds.find((speed) => speed.value === round.speed)?.label ??
+            'Casual'}{' '}
+          pace
         </p>
       )}
 
+      <p className="mt-3 text-xs text-slate-400">
+        Refresh discards unfinished rounds. Hidden tabs pause automatically;
+        resume when ready.
+      </p>
+      {!canStart && (
+        <p role="status" className="mt-2 text-xs text-amber-200">
+          Camera and model must be ready to start or resume.
+        </p>
+      )}
       <div className="mt-5 flex flex-wrap gap-2">
         {(status === 'ready' || status === 'ended' || !hasStarted) && (
           <button
-            disabled={disabled}
+            disabled={disabled || !canStart}
             onClick={onRoundStart}
             className="action-btn action-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -103,7 +126,7 @@ function Timer({
 
         {status === 'paused' && (
           <button
-            disabled={disabled}
+            disabled={disabled || !canStart}
             onClick={onRoundResume}
             className="action-btn action-btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -142,7 +165,7 @@ function Timer({
         )}
       </div>
     </section>
-  );
+  )
 }
 
-export default Timer;
+export default Timer

@@ -1,18 +1,29 @@
 {
-  "name": "my-boxing-app-workspace",
+  "name": "shadowboxer",
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "frontend",
-    "backend"
+    "frontend"
   ],
   "scripts": {
     "models:prepare": "node scripts/prepare-pose-models.mjs",
-    "dev": "scripts/dev.sh",
-    "dev:frontend": "npm run dev --workspace frontend --",
-    "dev:backend": "npm run dev --workspace backend",
+    "dev": "npm run dev --workspace frontend --",
     "build": "npm run build --workspace frontend",
-    "lint": "npm run lint --workspace frontend && npm run lint --workspace backend",
-    "preview": "npm run preview --workspace frontend"
-  }
+    "lint": "eslint frontend scripts/prepare-pose-models.mjs scripts/browser-smoke.mjs scripts/static-server.mjs scripts/benchmark-classifier.mjs tests eslint.config.mjs",
+    "preview": "npm run preview --workspace frontend",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "benchmark": "node scripts/benchmark-classifier.mjs"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "fake-indexeddb": "^6.2.5",
+    "prettier": "3.9.10"
+  },
+  "description": "Browser-based boxing practice with local pose detection and workout history."
 }

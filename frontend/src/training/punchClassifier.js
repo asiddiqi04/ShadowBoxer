@@ -28,8 +28,13 @@ const dist3d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 
 const armGeometry3D = (frame, side) => {
   const points = ['shoulder', 'elbow', 'wrist'].map((joint) =>
-    getPoint(frame?.keypoints3D, `${side}_${joint}`))
-  if (points.some((point) => !point || ![point.x, point.y, point.z].every(Number.isFinite))) {
+    getPoint(frame?.keypoints3D, `${side}_${joint}`),
+  )
+  if (
+    points.some(
+      (point) => !point || ![point.x, point.y, point.z].every(Number.isFinite),
+    )
+  ) {
     return null
   }
   const [shoulder, elbow, wrist] = points
@@ -44,7 +49,10 @@ const armGeometry3D = (frame, side) => {
 
 const armGeometry2D = (frame, side) => {
   const shoulder = getPoint(frame.keypoints, `${side}_shoulder`)
-  const opposite = getPoint(frame.keypoints, side === 'left' ? 'right_shoulder' : 'left_shoulder')
+  const opposite = getPoint(
+    frame.keypoints,
+    side === 'left' ? 'right_shoulder' : 'left_shoulder',
+  )
   const elbow = getPoint(frame.keypoints, `${side}_elbow`)
   const wrist = getPoint(frame.keypoints, `${side}_wrist`)
   if (!shoulder || !opposite || !elbow || !wrist) return null
@@ -53,10 +61,13 @@ const armGeometry2D = (frame, side) => {
     elbowAngle: angleDeg(shoulder, elbow, wrist),
     reach: dist2d(shoulder, wrist) / width,
     wristHeight: (shoulder.y - wrist.y) / width,
-    wristAcross: (wrist.x - shoulder.x) / width * Math.sign(opposite.x - shoulder.x),
-    elbowOut: (shoulder.x - elbow.x) / width * Math.sign(opposite.x - shoulder.x),
+    wristAcross:
+      ((wrist.x - shoulder.x) / width) * Math.sign(opposite.x - shoulder.x),
+    elbowOut:
+      ((shoulder.x - elbow.x) / width) * Math.sign(opposite.x - shoulder.x),
     elbowHeight: (shoulder.y - elbow.y) / width,
-    forearmFlat: Math.abs(wrist.y - elbow.y) <= Math.abs(wrist.x - elbow.x) * 0.55,
+    forearmFlat:
+      Math.abs(wrist.y - elbow.y) <= Math.abs(wrist.x - elbow.x) * 0.55,
   }
 }
 
@@ -69,8 +80,12 @@ const armMotion = (side, history, lastPunchTime, profile) => {
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const frame = history[index]
     const gap = frames.length ? frames.at(-1).time - frame.time : 0
-    if (frame.time <= lastPunchTime || current.time - frame.time > profile.motionWindowMs ||
-      (frames.length && (gap <= 0 || gap > maxFrameGapMs))) break
+    if (
+      frame.time <= lastPunchTime ||
+      current.time - frame.time > profile.motionWindowMs ||
+      (frames.length && (gap <= 0 || gap > maxFrameGapMs))
+    )
+      break
     frames.push(frame)
   }
   const imageArms = frames.map((frame) => armGeometry2D(frame, side))
@@ -81,59 +96,128 @@ const armMotion = (side, history, lastPunchTime, profile) => {
   const previousWorld = worldArms[1]
   const recentImages = imageArms.slice(1).filter(Boolean)
   const recentWorlds = worldArms.slice(1).filter(Boolean)
-  const imageGain = image && recentImages.length
-    ? image.reach - Math.min(...recentImages.map((arm) => arm.reach)) : 0
-  const elbowOpening = image && recentImages.length
-    ? image.elbowAngle - Math.min(...recentImages.map((arm) => arm.elbowAngle)) : 0
-  const worldGain = world && recentWorlds.length
-    ? (world.reach - Math.min(...recentWorlds.map((arm) => arm.reach))) / world.armLength : 0
+  const imageGain =
+    image && recentImages.length
+      ? image.reach - Math.min(...recentImages.map((arm) => arm.reach))
+      : 0
+  const elbowOpening =
+    image && recentImages.length
+      ? image.elbowAngle -
+        Math.min(...recentImages.map((arm) => arm.elbowAngle))
+      : 0
+  const worldGain =
+    world && recentWorlds.length
+      ? (world.reach - Math.min(...recentWorlds.map((arm) => arm.reach))) /
+        world.armLength
+      : 0
   // Measure the rise relative to the shoulder so whole-body movement does
   // not supply the uppercut trajectory. A high guard alone is insufficient.
-  const roseFromShoulder = Boolean(image && recentImages.some(arm =>
-    arm.wristHeight < 0 && image.wristHeight - arm.wristHeight > 0.35))
+  const roseFromShoulder = Boolean(
+    image &&
+    recentImages.some(
+      (arm) =>
+        arm.wristHeight < 0 && image.wristHeight - arm.wristHeight > 0.35,
+    ),
+  )
   // A hook first lifts/flares the elbow, then sweeps the fist inward.
   // Lateral drift by itself also occurs during straight-punch preparation.
-  const sweptAcross = Boolean(image && previousImage && image.wristAcross > previousImage.wristAcross &&
-    recentImages.some(arm => ((arm.elbowOut > 0.3 && arm.elbowHeight > -0.1) ||
-      (arm.elbowOut > 0.5 && arm.forearmFlat)) &&
-      image.wristAcross - arm.wristAcross > 0.25))
+  const sweptAcross = Boolean(
+    image &&
+    previousImage &&
+    image.wristAcross > previousImage.wristAcross &&
+    recentImages.some(
+      (arm) =>
+        ((arm.elbowOut > 0.3 && arm.elbowHeight > -0.1) ||
+          (arm.elbowOut > 0.5 && arm.forearmFlat)) &&
+        image.wristAcross - arm.wristAcross > 0.25,
+    ),
+  )
 
   // Camera tilt can make a straight punch travel upward in the image. Look
   // for elbow opening and reach, not forearm orientation relative to the floor.
   // Neither estimate gets to veto strong temporal evidence from the other.
   // A slightly bent endpoint is usable when the trajectory supplies strong
   // opening and reach evidence; the relaxed angle alone is not sufficient.
-  const extendedImage = image && (image.elbowAngle >= 150 ||
-    (image.elbowAngle >= 145 && elbowOpening > 60 && imageGain > 0.25))
+  const extendedImage =
+    image &&
+    (image.elbowAngle >= 150 ||
+      (image.elbowAngle >= 145 && elbowOpening > 60 && imageGain > 0.25))
   // Dropping the guarding arm and carrying a bent hook across the torso can
   // both look straight in projection. Neither establishes a 2D straight;
   // reliable 3D extension can still identify a downward-directed punch.
-  const loweringArm = image && image.wristHeight < -0.75 &&
+  const loweringArm =
+    image &&
+    image.wristHeight < -0.75 &&
     -image.wristHeight > Math.abs(image.wristAcross) * 1.5
-  const bentAcrossBody = image && image.wristAcross > 1 && world && world.elbowAngle <= 140
-  const straight2D = Boolean(extendedImage && previousImage && !loweringArm && !bentAcrossBody &&
-    imageGain > 0.18 && elbowOpening > 20 && image.reach >= previousImage.reach - 0.02)
-  const straight3D = Boolean(world && previousWorld && world.elbowAngle >= 145 &&
-    worldGain > 0.1 && (world.reach - previousWorld.reach) / world.armLength >= -0.015)
-  const straightShape = Boolean((image && image.elbowAngle >= 150) || (world && world.elbowAngle >= 145))
-  const uppercutFromLow = Boolean(image && recentImages.some((arm) =>
-    arm.wristHeight < -0.2 && image.wristHeight - arm.wristHeight > 0.25))
+  const bentAcrossBody =
+    image && image.wristAcross > 1 && world && world.elbowAngle <= 140
+  const straight2D = Boolean(
+    extendedImage &&
+    previousImage &&
+    !loweringArm &&
+    !bentAcrossBody &&
+    imageGain > 0.18 &&
+    elbowOpening > 20 &&
+    image.reach >= previousImage.reach - 0.02,
+  )
+  const straight3D = Boolean(
+    world &&
+    previousWorld &&
+    world.elbowAngle >= 145 &&
+    worldGain > 0.1 &&
+    (world.reach - previousWorld.reach) / world.armLength >= -0.015,
+  )
+  const straightShape = Boolean(
+    (image && image.elbowAngle >= 150) || (world && world.elbowAngle >= 145),
+  )
+  const uppercutFromLow = Boolean(
+    image &&
+    recentImages.some(
+      (arm) =>
+        arm.wristHeight < -0.2 && image.wristHeight - arm.wristHeight > 0.25,
+    ),
+  )
   const openingIntoStraight = imageGain > 0.18 && elbowOpening > 35
   // The sideways/upward portion of a straight's recoil is not another
   // curved punch. Wait until the elbow stops closing before considering it.
-  const returningFromStraight = Boolean(image && previousImage &&
+  const returningFromStraight = Boolean(
+    image &&
+    previousImage &&
     image.elbowAngle < previousImage.elbowAngle - 5 &&
-    recentImages.some(arm => arm.elbowAngle >= 145 && arm.elbowAngle - image.elbowAngle > 20))
+    recentImages.some(
+      (arm) => arm.elbowAngle >= 145 && arm.elbowAngle - image.elbowAngle > 20,
+    ),
+  )
   // A compact uppercut can start at chin-height. Look for a rising path
   // whose elbow remains bent, rather than requiring a drop below the shoulder.
-  const uppercutFromGuard = Boolean(image && image.elbowAngle >= 65 && image.elbowAngle <= 132 &&
-    recentImages.some((arm) => arm.elbowAngle >= 65 && arm.elbowAngle <= 132 &&
-      Math.abs(image.elbowAngle - arm.elbowAngle) <= 15 && image.wristHeight - arm.wristHeight > 0.25) &&
-    frames.length >= 3 && current.time - frames.at(-1).time >= profile.uppercutConfirmMs &&
-    elbowOpening <= 20)
+  const uppercutFromGuard = Boolean(
+    image &&
+    image.elbowAngle >= 65 &&
+    image.elbowAngle <= 132 &&
+    recentImages.some(
+      (arm) =>
+        arm.elbowAngle >= 65 &&
+        arm.elbowAngle <= 132 &&
+        Math.abs(image.elbowAngle - arm.elbowAngle) <= 15 &&
+        image.wristHeight - arm.wristHeight > 0.25,
+    ) &&
+    frames.length >= 3 &&
+    current.time - frames.at(-1).time >= profile.uppercutConfirmMs &&
+    elbowOpening <= 20,
+  )
 
-  return { world, straight2D, straight3D, straightShape, uppercutFromLow, uppercutFromGuard,
-    openingIntoStraight, returningFromStraight, roseFromShoulder, sweptAcross }
+  return {
+    world,
+    straight2D,
+    straight3D,
+    straightShape,
+    uppercutFromLow,
+    uppercutFromGuard,
+    openingIntoStraight,
+    returningFromStraight,
+    roseFromShoulder,
+    sweptAcross,
+  }
 }
 
 const hasRecovered = (side, history, lastPunchTime) => {
@@ -146,13 +230,25 @@ const hasRecovered = (side, history, lastPunchTime) => {
   return history.slice(punchIndex + 1, -1).some((frame) => {
     const image = armGeometry2D(frame, side)
     const world = armGeometry3D(frame, side)
-    return (image && punchedImage && (image.reach < punchedImage.reach - 0.12 ||
-      image.elbowAngle < punchedImage.elbowAngle - 20 || image.wristHeight < punchedImage.wristHeight - 0.18)) ||
-      (world && punchedWorld && world.reach < punchedWorld.reach - punchedWorld.armLength * 0.08)
+    return (
+      (image &&
+        punchedImage &&
+        (image.reach < punchedImage.reach - 0.12 ||
+          image.elbowAngle < punchedImage.elbowAngle - 20 ||
+          image.wristHeight < punchedImage.wristHeight - 0.18)) ||
+      (world &&
+        punchedWorld &&
+        world.reach < punchedWorld.reach - punchedWorld.armLength * 0.08)
+    )
   })
 }
 
-export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casual') => {
+export const scorePunchForSide = (
+  side,
+  history,
+  lastPunchBySide,
+  speed = 'casual',
+) => {
   if (history.length < 3) return { detection: null, debug: null }
   const current = history[history.length - 1]
   const prev = history[history.length - 2]
@@ -160,7 +256,10 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   const now = current.time
   const profile = getSpeedProfile(speed)
   const lastPunchTime = lastPunchBySide[side] ?? 0
-  const cooldownRemaining = lastPunchTime > 0 ? Math.max(0, profile.cooldownMs - (now - lastPunchTime)) : 0
+  const cooldownRemaining =
+    lastPunchTime > 0
+      ? Math.max(0, profile.cooldownMs - (now - lastPunchTime))
+      : 0
 
   const kps = current.keypoints
   const prevKps = prev?.keypoints
@@ -170,7 +269,10 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   const elbow = getPoint(kps, `${side}_elbow`)
   const shoulder = getPoint(kps, `${side}_shoulder`)
   const hip = getPoint(kps, `${side}_hip`)
-  const oppShoulder = getPoint(kps, side === 'left' ? 'right_shoulder' : 'left_shoulder')
+  const oppShoulder = getPoint(
+    kps,
+    side === 'left' ? 'right_shoulder' : 'left_shoulder',
+  )
   const nose = getPoint(kps, 'nose', 0.3)
 
   if (!wrist || !elbow || !shoulder || !hip || !oppShoulder || !nose) {
@@ -184,33 +286,53 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   // Normalize motion to 100 ms so higher capture rates do not make hooks and
   // uppercuts appear slower just because each individual step is smaller.
   const elapsed = current.time - prev.time
-  const motionScale = elapsed > 0 && elapsed <= maxFrameGapMs ? Math.min(4, 100 / elapsed) : 0
-  const vel = prevWrist ? dist2d(wrist, prevWrist) / shoulderWidth * motionScale : 0
-  const lateralMove = prevWrist ? (wrist.x - prevWrist.x) / shoulderWidth * motionScale : 0
-  const verticalMove = prevWrist ? (prevWrist.y - wrist.y) / shoulderWidth * motionScale : 0
+  const motionScale =
+    elapsed > 0 && elapsed <= maxFrameGapMs ? Math.min(4, 100 / elapsed) : 0
+  const vel = prevWrist
+    ? (dist2d(wrist, prevWrist) / shoulderWidth) * motionScale
+    : 0
+  const lateralMove = prevWrist
+    ? ((wrist.x - prevWrist.x) / shoulderWidth) * motionScale
+    : 0
+  const verticalMove = prevWrist
+    ? ((prevWrist.y - wrist.y) / shoulderWidth) * motionScale
+    : 0
   const lateralAbs = Math.abs(lateralMove)
   const verticalAbs = Math.abs(verticalMove)
   const extensionNow = dist2d(wrist, shoulder) / shoulderWidth
-  const extensionPrev = prevWrist ? dist2d(prevWrist, shoulder) / shoulderWidth : extensionNow
+  const extensionPrev = prevWrist
+    ? dist2d(prevWrist, shoulder) / shoulderWidth
+    : extensionNow
   const extensionDelta = extensionNow - extensionPrev
   const depthDelta =
-    prevWrist && wrist.z != null && prevWrist.z != null ? prevWrist.z - wrist.z : 0
+    prevWrist && wrist.z != null && prevWrist.z != null
+      ? prevWrist.z - wrist.z
+      : 0
 
   const elbowAngle = angleDeg(shoulder, elbow, wrist)
   const elbowBent = elbowAngle >= 80 && elbowAngle <= 132
   const elbowMostlyStraight = elbowAngle >= 150
   const forearmDx = wrist.x - elbow.x
   const forearmDy = wrist.y - elbow.y
-  const forearmRawAngle = Math.abs((Math.atan2(forearmDy, forearmDx) * 180) / Math.PI)
-  const forearmAngleToHorizontal = Math.min(forearmRawAngle, Math.abs(180 - forearmRawAngle))
+  const forearmRawAngle = Math.abs(
+    (Math.atan2(forearmDy, forearmDx) * 180) / Math.PI,
+  )
+  const forearmAngleToHorizontal = Math.min(
+    forearmRawAngle,
+    Math.abs(180 - forearmRawAngle),
+  )
   const armParallelFloor = forearmAngleToHorizontal <= 28
   const armPerpendicularFloor = forearmAngleToHorizontal >= 62
   const nearCenter = Math.abs(wrist.x - nose.x) / shoulderWidth < 0.5
   const nearHead = wrist.y < nose.y + 0.25 * shoulderWidth
-  const shoulderHeightBand = Math.abs(wrist.y - shoulder.y) < 0.35 * shoulderWidth
-  const lowPrep = olderWrist ? olderWrist.y - shoulder.y > 0.45 * shoulderWidth : false
+  const shoulderHeightBand =
+    Math.abs(wrist.y - shoulder.y) < 0.35 * shoulderWidth
+  const lowPrep = olderWrist
+    ? olderWrist.y - shoulder.y > 0.45 * shoulderWidth
+    : false
   const risingFromLow = olderWrist
-    ? olderWrist.y - shoulder.y > 0.3 * shoulderWidth && olderWrist.y - wrist.y > 0.18 * shoulderWidth
+    ? olderWrist.y - shoulder.y > 0.3 * shoulderWidth &&
+      olderWrist.y - wrist.y > 0.18 * shoulderWidth
     : false
   const verticalBurst = verticalMove > 0.3
   const lateralBurst = lateralAbs > 0.24
@@ -272,11 +394,19 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   // A confirmed lateral arc with a bent world-space elbow takes precedence
   // over a straight-looking projection. Diagonal sweeps need a flatter
   // forearm so rising jabs do not qualify from incidental sideways motion.
-  const sweepingBentArm = Boolean(motion.sweptAcross && lateralAbs > profile.minMotion &&
+  const sweepingBentArm = Boolean(
+    motion.sweptAcross &&
+    lateralAbs > profile.minMotion &&
     (lateralDominant || forearmAngleToHorizontal <= 45) &&
-    forearmAngleToHorizontal <= 60 && elbowAngle >= 40 && motion.world &&
-    motion.world.elbowAngle >= 65 && motion.world.elbowAngle <= 140 && !motion.returningFromStraight)
-  const straightEligible = (motion.straight2D && !sweepingBentArm) || motion.straight3D
+    forearmAngleToHorizontal <= 60 &&
+    elbowAngle >= 40 &&
+    motion.world &&
+    motion.world.elbowAngle >= 65 &&
+    motion.world.elbowAngle <= 140 &&
+    !motion.returningFromStraight,
+  )
+  const straightEligible =
+    (motion.straight2D && !sweepingBentArm) || motion.straight3D
   const straightScore = straightEligible ? 100 : 0
   const curvedArm = !motion.straightShape && !motion.returningFromStraight
   // Rising from a high guard is also the beginning of a jab/cross. Do not
@@ -284,12 +414,22 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   // A camera-facing uppercut can open dramatically in 2D while staying bent
   // in 3D. Allow that projection only with an upright forearm and a rise
   // from shoulder level or lower. Keep the straight/recoil vetoes above.
-  const risingBentArm = Boolean(motion.roseFromShoulder && forearmAngleToHorizontal >= 70 &&
-    elbowAngle >= 40 && elbowAngle <= 132 && motion.world &&
-    motion.world.elbowAngle >= 65 && motion.world.elbowAngle <= 132)
-  const uppercutEligible = curvedArm && (risingBentArm ||
-    ((motion.uppercutFromLow || motion.uppercutFromGuard) && !motion.openingIntoStraight &&
-      elbowAngle >= 65 && elbowAngle <= 132))
+  const risingBentArm = Boolean(
+    motion.roseFromShoulder &&
+    forearmAngleToHorizontal >= 70 &&
+    elbowAngle >= 40 &&
+    elbowAngle <= 132 &&
+    motion.world &&
+    motion.world.elbowAngle >= 65 &&
+    motion.world.elbowAngle <= 132,
+  )
+  const uppercutEligible =
+    curvedArm &&
+    (risingBentArm ||
+      ((motion.uppercutFromLow || motion.uppercutFromGuard) &&
+        !motion.openingIntoStraight &&
+        elbowAngle >= 65 &&
+        elbowAngle <= 132))
   // Replace the 2D not-bent penalty (-14) with bent-arm evidence (+22)
   // only when this trajectory also has reliable world-space confirmation.
   if (risingBentArm && !elbowBent) upperScore += 36
@@ -300,22 +440,47 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
     uppercut: Math.round(upperScore),
   }
   const candidates = [
-    { type: straightType, score: scoreByType[straightType], side, eligible: straightEligible },
+    {
+      type: straightType,
+      score: scoreByType[straightType],
+      side,
+      eligible: straightEligible,
+    },
     // Lateral drift alone can score as a hook while a jab leaves guard.
     // Require its bent-arm shape and exclude an arm opening into a straight.
-    { type: 'hook', score: scoreByType.hook, side,
-      eligible: sweepingBentArm || (curvedArm && elbowBent && !motion.openingIntoStraight &&
-        lateralAbs > profile.minMotion && lateralAbs > verticalAbs) },
-    { type: 'uppercut', score: scoreByType.uppercut, side,
-      eligible: uppercutEligible && verticalMove > profile.minMotion && verticalMove > lateralAbs },
-  ].filter((candidate) => candidate.eligible)
+    {
+      type: 'hook',
+      score: scoreByType.hook,
+      side,
+      eligible:
+        sweepingBentArm ||
+        (curvedArm &&
+          elbowBent &&
+          !motion.openingIntoStraight &&
+          lateralAbs > profile.minMotion &&
+          lateralAbs > verticalAbs),
+    },
+    {
+      type: 'uppercut',
+      score: scoreByType.uppercut,
+      side,
+      eligible:
+        uppercutEligible &&
+        verticalMove > profile.minMotion &&
+        verticalMove > lateralAbs,
+    },
+  ]
+    .filter((candidate) => candidate.eligible)
     .map(({ type, score, side }) => ({ type, score, side }))
 
-  const best = candidates.reduce((acc, cur) => (cur.score > acc.score ? cur : acc), {
-    type: null,
-    score: 0,
-    side,
-  })
+  const best = candidates.reduce(
+    (acc, cur) => (cur.score > acc.score ? cur : acc),
+    {
+      type: null,
+      score: 0,
+      side,
+    },
+  )
 
   const threshold = {
     jab: 68,
@@ -327,9 +492,7 @@ export const scorePunchForSide = (side, history, lastPunchBySide, speed = 'casua
   const recovered = hasRecovered(side, history, lastPunchTime)
   const canDetect = cooldownRemaining === 0 && recovered
   const detection =
-    canDetect && best.type && best.score >= threshold[best.type]
-      ? best
-      : null
+    canDetect && best.type && best.score >= threshold[best.type] ? best : null
 
   return {
     detection,

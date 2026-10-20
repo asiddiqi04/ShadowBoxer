@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto'
-import { createSession, validateSessionPayload } from '../sessionStore.js'
 import {
   applyPunchToCombo,
   initialComboStats,
@@ -7,20 +5,25 @@ import {
   releaseComboIfReady,
 } from './comboService.js'
 import { classifyPunch, initialPunchCounts } from './punchClassifier.js'
-import { DEFAULT_SPEED, getSpeedProfile, isValidSpeed } from './speedProfiles.js'
+import { validatePoseFramePayload } from './validators.js'
+import {
+  DEFAULT_SPEED,
+  getSpeedProfile,
+  isValidSpeed,
+} from './speedProfiles.js'
 
 export const ROUND_SECONDS = 180
 const maxFrameHistory = 40
 
 export class TrainingError extends Error {
-  constructor(message, statusCode = 400) {
+  constructor(message) {
     super(message)
     this.name = 'TrainingError'
-    this.statusCode = statusCode
   }
 }
 
 const createReadyState = (random = Math.random, speed = DEFAULT_SPEED) => ({
+  id: null,
   status: 'ready',
   speed,
   roundDurationSeconds: ROUND_SECONDS,
@@ -40,27 +43,32 @@ const createReadyState = (random = Math.random, speed = DEFAULT_SPEED) => ({
   debugRows: [],
   frameHistory: [],
   lastPunchBySide: { left: 0, right: 0 },
-  lastSavedSession: null,
+  completedSession: null,
 })
 
 const elapsedMsForState = (state, nowMs) => {
-  if (!state.startedAtMs) return 0
+  if (state.startedAtMs == null) return 0
 
   const endMs =
     state.status === 'running'
       ? nowMs
-      : state.pausedAtMs ?? state.endedAtMs ?? nowMs
+      : (state.pausedAtMs ?? state.endedAtMs ?? nowMs)
 
   return Math.max(0, endMs - state.startedAtMs - state.pausedDurationMs)
 }
 
-const serialize = (state, nowMs) => {
+const serialize = (state, nowMs, generation) => {
   const elapsedMs = elapsedMsForState(state, nowMs)
   const durationMs = state.roundDurationSeconds * 1000
-  const timeLeftSeconds = Math.max(0, Math.ceil((durationMs - elapsedMs) / 1000))
+  const timeLeftSeconds = Math.max(
+    0,
+    Math.ceil((durationMs - elapsedMs) / 1000),
+  )
 
   return {
     round: {
+      id: state.id,
+      generation,
       status: state.status,
       speed: state.speed,
       frameIntervalMs: getSpeedProfile(state.speed).frameIntervalMs,
@@ -68,146 +76,186 @@ const serialize = (state, nowMs) => {
       startedAt: state.startedAt,
       endedAt: state.endedAt,
       durationSeconds: state.roundDurationSeconds,
-      elapsedSeconds: Math.floor(elapsedMs / 1000),
+      elapsedSeconds: Math.floor(Math.min(elapsedMs, durationMs) / 1000),
       timeLeftSeconds,
     },
     currentCombo: [...state.currentCombo],
     comboStepIndex: state.comboStepIndex,
     comboStats: { ...state.comboStats },
     comboResult: state.comboResult,
-    lastPunchEvent: state.lastPunchEvent,
+    lastPunchEvent: state.lastPunchEvent ? { ...state.lastPunchEvent } : null,
     punchCounts: { ...state.punchCounts },
-    debugRows: state.debugRows,
+    debugRows: structuredClone(state.debugRows),
     session: {
-      lastSavedSession: state.lastSavedSession,
+      completedSession: state.completedSession,
     },
   }
 }
 
-export const createTrainingService = ({ now = Date.now, random = Math.random } = {}) => {
+const freeze = (value) => {
+  for (const item of Object.values(value))
+    if (item && typeof item === 'object') freeze(item)
+  return Object.freeze(value)
+}
+
+export const createTrainingService = ({
+  now = () => performance.now(),
+  wallNow = Date.now,
+  random = Math.random,
+  createId = () => globalThis.crypto.randomUUID(),
+} = {}) => {
   let state = createReadyState(random)
+  let generation = 0
+  let completions = []
+  const snapshot = () => serialize(state, now(), generation)
 
-  const persistCompletedSession = (endedAtMs) => {
-    if (!state.startedAt || state.lastSavedSession) return state.lastSavedSession
-
-    const endedAt = new Date(endedAtMs).toISOString()
-    const payload = {
-      id: randomUUID(),
+  const complete = () => {
+    if (state.completedSession) return state.completedSession
+    state.completedSession = freeze({
+      schemaVersion: 1,
+      id: state.id,
       startedAt: state.startedAt,
-      endedAt,
+      endedAt: state.endedAt,
       roundDurationSeconds: state.roundDurationSeconds,
-      comboStats: state.comboStats,
-      details: {
-        source: 'backend-training-service',
-        speed: state.speed,
-        latestResult: state.comboResult,
-        lastPunchEvent: state.lastPunchEvent,
-        punchCounts: state.punchCounts,
-      },
-    }
-
-    const validated = validateSessionPayload(payload)
-    if (!validated.ok) {
-      throw new TrainingError(validated.message, 500)
-    }
-
-    state.lastSavedSession = createSession(validated.value)
-    return state.lastSavedSession
+      durationSeconds: Math.min(
+        ROUND_SECONDS,
+        elapsedMsForState(state, now()) / 1000,
+      ),
+      comboStats: { ...state.comboStats },
+      details: { speed: state.speed, punchCounts: { ...state.punchCounts } },
+    })
+    completions.push(state.completedSession)
+    return state.completedSession
   }
 
   const endRoundInternal = (nowMs) => {
     if (!state.startedAt || state.status === 'ready') return null
-    if (state.status === 'ended') return state.lastSavedSession
+    if (state.status === 'ended') return state.completedSession
+    const elapsed = elapsedMsForState(state, nowMs)
+    generation += 1
 
     state = {
       ...state,
       status: 'ended',
-      endedAt: new Date(nowMs).toISOString(),
-      endedAtMs: nowMs,
+      endedAt: new Date(wallNow()).toISOString(),
+      endedAtMs:
+        state.startedAtMs +
+        state.pausedDurationMs +
+        Math.min(elapsed, ROUND_SECONDS * 1000),
+      frameHistory: [],
       pausedAtMs: null,
       comboLockedUntil: null,
     }
 
-    return persistCompletedSession(nowMs)
+    return complete()
   }
 
   const refreshState = () => {
     const nowMs = now()
-    state = releaseComboIfReady(state, nowMs, random)
+    if (state.status === 'running')
+      state = releaseComboIfReady(state, nowMs, random)
 
     const elapsedMs = elapsedMsForState(state, nowMs)
-    if (state.status === 'running' && elapsedMs >= state.roundDurationSeconds * 1000) {
+    if (
+      state.status === 'running' &&
+      elapsedMs >= state.roundDurationSeconds * 1000
+    ) {
       endRoundInternal(nowMs)
     }
 
-    return serialize(state, now())
+    return snapshot()
   }
 
   const startRound = (speed = DEFAULT_SPEED) => {
     if (!isValidSpeed(speed)) {
       throw new TrainingError('Choose a round speed: form, casual, or intense.')
     }
+    refreshState()
+    if (state.status === 'running' || state.status === 'paused')
+      return snapshot()
     const nowMs = now()
+    generation += 1
     state = {
       ...createReadyState(random, speed),
+      id: createId(),
       status: 'running',
-      startedAt: new Date(nowMs).toISOString(),
+      startedAt: new Date(wallNow()).toISOString(),
       startedAtMs: nowMs,
     }
 
-    return serialize(state, nowMs)
+    return snapshot()
   }
 
   const pauseRound = () => {
     const nowMs = now()
     refreshState()
-    if (state.status !== 'running') return serialize(state, nowMs)
+    if (state.status !== 'running') return snapshot()
 
+    generation += 1
     state = {
       ...state,
+      frameHistory: [],
       status: 'paused',
       pausedAtMs: nowMs,
     }
 
-    return serialize(state, nowMs)
+    return snapshot()
   }
 
   const resumeRound = () => {
     const nowMs = now()
     refreshState()
-    if (state.status !== 'paused') return serialize(state, nowMs)
+    if (state.status !== 'paused') return snapshot()
 
+    generation += 1
     state = {
       ...state,
+      comboLockedUntil:
+        state.comboLockedUntil == null
+          ? null
+          : state.comboLockedUntil + nowMs - state.pausedAtMs,
       status: 'running',
-      pausedDurationMs: state.pausedDurationMs + Math.max(0, nowMs - state.pausedAtMs),
+      pausedDurationMs:
+        state.pausedDurationMs + Math.max(0, nowMs - state.pausedAtMs),
       pausedAtMs: null,
       frameHistory: [],
     }
 
-    return serialize(state, nowMs)
+    return snapshot()
   }
 
   const resetRound = () => {
+    refreshState()
+    generation += 1
     state = createReadyState(random, state.speed)
-    return serialize(state, now())
+    return snapshot()
   }
 
   const endRound = () => {
     const nowMs = now()
     const session = endRoundInternal(nowMs)
     return {
-      state: serialize(state, nowMs),
+      state: snapshot(),
       session,
     }
   }
 
-  const submitFrame = (frame) => {
+  const submitFrame = (frame, runGeneration = generation) => {
     const nowMs = now()
     refreshState()
 
-    if (state.status !== 'running') {
-      throw new TrainingError('A running round is required before submitting pose frames.', 409)
+    if (state.status !== 'running' || runGeneration !== generation)
+      return { state: snapshot(), punchEvent: null, accepted: false }
+    const validated = validatePoseFramePayload(frame)
+    if (!validated.ok) throw new TrainingError(validated.message)
+    frame = validated.value
+    if (
+      frame.time < state.startedAtMs ||
+      frame.time > nowMs ||
+      (state.frameHistory.length &&
+        frame.time <= state.frameHistory.at(-1).time)
+    ) {
+      return { state: snapshot(), punchEvent: null, accepted: false }
     }
 
     const frameEntry = {
@@ -215,8 +263,14 @@ export const createTrainingService = ({ now = Date.now, random = Math.random } =
       keypoints3D: frame.keypoints3D,
       time: frame.time,
     }
-    const frameHistory = [...state.frameHistory, frameEntry].slice(-maxFrameHistory)
-    const classification = classifyPunch(frameHistory, state.lastPunchBySide, state.speed)
+    const frameHistory = [...state.frameHistory, frameEntry].slice(
+      -maxFrameHistory,
+    )
+    const classification = classifyPunch(
+      frameHistory,
+      state.lastPunchBySide,
+      state.speed,
+    )
 
     state = {
       ...state,
@@ -232,11 +286,14 @@ export const createTrainingService = ({ now = Date.now, random = Math.random } =
       }
       state.punchCounts = {
         ...state.punchCounts,
-        [classification.punch.type]: state.punchCounts[classification.punch.type] + 1,
+        [classification.punch.type]:
+          state.punchCounts[classification.punch.type] + 1,
       }
 
       const comboState = applyPunchToCombo(state, classification.punch, {
         nowMs,
+        wallNowMs: wallNow(),
+        id: createId(),
         random,
         lockDelayMs: getSpeedProfile(state.speed).comboDelayMs,
       })
@@ -253,13 +310,20 @@ export const createTrainingService = ({ now = Date.now, random = Math.random } =
     }
 
     return {
-      state: serialize(state, nowMs),
+      state: snapshot(),
       punchEvent,
+      accepted: true,
     }
   }
 
   return {
     getState: refreshState,
+    getGeneration: () => generation,
+    takeCompletions: () => {
+      const completed = completions
+      completions = []
+      return completed
+    },
     startRound,
     pauseRound,
     resumeRound,
@@ -268,5 +332,3 @@ export const createTrainingService = ({ now = Date.now, random = Math.random } =
     submitFrame,
   }
 }
-
-export const trainingService = createTrainingService()

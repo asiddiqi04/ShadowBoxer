@@ -1,0 +1,28 @@
+name: Validate guest app
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm test
+      - uses: actions/cache@v4
+        with:
+          path: .cache/pose-models
+          key: pose-archives-${{ hashFiles('scripts/prepare-pose-models.mjs') }}
+      # Cached archives are checksum-verified and freshly extracted on every build.
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

@@ -12,7 +12,7 @@ const validateKeypoint = (keypoint) =>
 
 export const validatePoseFramePayload = (payload) => {
   if (!payload || typeof payload !== 'object') {
-    return { ok: false, message: 'Request body must be an object.' }
+    return { ok: false, message: 'Pose frame must be an object.' }
   }
 
   if (!Array.isArray(payload.keypoints) || payload.keypoints.length === 0) {
@@ -22,18 +22,28 @@ export const validatePoseFramePayload = (payload) => {
   if (!payload.keypoints.every(validateKeypoint)) {
     return {
       ok: false,
-      message: 'Each keypoint must include name, numeric x, and numeric y values.',
+      message:
+        'Each keypoint must include name, numeric x, and numeric y values.',
     }
   }
 
-  if (payload.keypoints3D != null && (
-    !Array.isArray(payload.keypoints3D) ||
-    !payload.keypoints3D.every((point) => validateKeypoint(point) && isFiniteNumber(point.z))
-  )) {
-    return { ok: false, message: 'keypoints3D must contain named points with numeric x, y, and z values.' }
+  if (
+    payload.keypoints3D != null &&
+    (!Array.isArray(payload.keypoints3D) ||
+      !payload.keypoints3D.every(
+        (point) => validateKeypoint(point) && isFiniteNumber(point.z),
+      ))
+  ) {
+    return {
+      ok: false,
+      message:
+        'keypoints3D must contain named points with numeric x, y, and z values.',
+    }
   }
 
-  const time = isFiniteNumber(payload.time) && payload.time >= 0 ? payload.time : Date.now()
+  if (!isFiniteNumber(payload.time) || payload.time < 0)
+    return { ok: false, message: 'A monotonic frame timestamp is required.' }
+  const time = payload.time
   const keypoints = payload.keypoints.map((keypoint) => ({
     name: keypoint.name,
     x: keypoint.x,
@@ -47,7 +57,13 @@ export const validatePoseFramePayload = (payload) => {
     value: {
       time,
       keypoints,
-      keypoints3D: payload.keypoints3D?.map(({ name, x, y, z, score }) => ({ name, x, y, z, score })),
+      keypoints3D: payload.keypoints3D?.map(({ name, x, y, z, score }) => ({
+        name,
+        x,
+        y,
+        z,
+        score,
+      })),
     },
   }
 }
