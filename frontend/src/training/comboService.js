@@ -44,9 +44,13 @@ export const releaseComboIfReady = (state, nowMs, random = Math.random) => {
 export const applyPunchToCombo = (state, punch, options = {}) => {
   const nowMs = options.nowMs ?? Date.now()
   const lockDelayMs = options.lockDelayMs ?? 850
-  const id = options.id ?? `${nowMs}-${Math.random().toString(36).slice(2, 8)}`
+  const id =
+    options.id ??
+    `${nowMs}-${(options.random ?? Math.random)().toString(36).slice(2, 8)}`
   const releasedState = releaseComboIfReady(state, nowMs, options.random)
-  const comboLocked = Boolean(releasedState.comboLockedUntil && nowMs < releasedState.comboLockedUntil)
+  const comboLocked = Boolean(
+    releasedState.comboLockedUntil && nowMs < releasedState.comboLockedUntil,
+  )
   const expectedIndex = releasedState.comboStepIndex
   const expected = releasedState.currentCombo[expectedIndex] ?? null
   const matched = !comboLocked && expected ? punch.type === expected : false
@@ -59,7 +63,7 @@ export const applyPunchToCombo = (state, punch, options = {}) => {
     expectedIndex,
     matched,
     comboLocked,
-    detectedAt: new Date(nowMs).toISOString(),
+    detectedAt: new Date(options.wallNowMs ?? Date.now()).toISOString(),
   }
 
   if (comboLocked) {
