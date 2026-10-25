@@ -10,7 +10,9 @@ import { usePunchSound } from './hooks/usePunchSound'
 
 function App() {
   const { unlock: unlockPunchSound, play: playPunchSound } = usePunchSound()
-  const [engine] = useState(() => createTrainingService())
+  const [engine] = useState(() =>
+    createTrainingService({ includeDebug: import.meta.env.DEV }),
+  )
   const [trainingState, setTrainingState] = useState(() => engine.getState())
   const [selectedSpeed, setSelectedSpeed] = useState('casual')
   const [trainingError, setTrainingError] = useState('')

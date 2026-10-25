@@ -9,13 +9,15 @@
     "models:prepare": "node scripts/prepare-pose-models.mjs",
     "dev": "npm run dev --workspace frontend --",
     "build": "npm run build --workspace frontend",
-    "lint": "eslint frontend scripts/prepare-pose-models.mjs scripts/browser-smoke.mjs scripts/static-server.mjs scripts/benchmark-classifier.mjs tests eslint.config.mjs",
+    "lint": "eslint frontend scripts/prepare-pose-models.mjs scripts/browser-smoke.mjs scripts/dev-tools-smoke.mjs scripts/static-server.mjs scripts/benchmark-classifier.mjs tests eslint.config.mjs",
     "preview": "npm run preview --workspace frontend",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/browser-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "benchmark": "node scripts/benchmark-classifier.mjs"
+    "benchmark": "node scripts/benchmark-classifier.mjs",
+    "pretest:dev-tools": "npm run models:prepare",
+    "test:dev-tools": "node scripts/dev-tools-smoke.mjs"
   },
   "engines": {
     "node": "22.x"

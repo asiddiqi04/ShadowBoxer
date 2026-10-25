@@ -8,7 +8,6 @@ ShadowBoxer turns a webcam into an interactive boxing trainer. Practice orthodox
 - Three-minute rounds with Form, Casual, and Intense pacing, plus pause, resume, and reset controls.
 - Combo progress, punch counts, and workout summaries saved locally in your browser.
 - Automatic pause when the tab is hidden or tracking becomes unavailable, with camera and model recovery controls.
-- Optional local recordings with video, landmark data, and a blank labeling template for reviewing movement.
 
 No account, backend server, database service, or environment variables are required.
 
@@ -41,22 +40,23 @@ The production browser suite starts its own static server and uses a synthetic c
 ```sh
 npx playwright install chromium
 npm run test:browser
+npm run test:dev-tools   # Recording/debug checks against a local dev server
 ```
 
-Run `npm run build` first. On Linux, use `npx playwright install --with-deps chromium` to install browser system dependencies too. Set `CHROME_PATH` to use an existing Chrome executable. For an actual three-minute offline round and recording-limit check, run `FULL_ROUND_SMOKE=1 npm run test:browser`. The default suite accelerates the round clock.
+Run `npm run build` first. On Linux, use `npx playwright install --with-deps chromium` to install browser system dependencies too. Set `CHROME_PATH` to use an existing Chrome executable. For an actual three-minute offline round check, run `FULL_ROUND_SMOKE=1 npm run test:browser`. The default suite accelerates the round clock.
 
-GitHub Actions runs formatting, lint, unit tests, a production build, and the browser suite on Ubuntu with Node 22. Automated camera tests do not replace testing real punches and audio on physical devices. An optional synthetic classifier benchmark is available with `npm run benchmark`.
+GitHub Actions runs formatting, lint, unit tests, a production build, and both browser suites on Ubuntu with Node 22. Automated camera tests do not replace testing real punches and audio on physical devices. An optional synthetic classifier benchmark is available with `npm run benchmark`.
 
 ## Stack and structure
 
-| Layer                | Technology                                     |
-| -------------------- | ---------------------------------------------- |
-| Interface            | React 19, Tailwind CSS 4                       |
-| Build                | Vite 7, npm workspaces                         |
-| Pose detection       | TensorFlow.js, BlazePose, WebGL                |
-| Browser capabilities | IndexedDB, Web Audio, MediaRecorder            |
-| Validation           | ESLint, Prettier, Node test runner, Playwright |
-| Hosting              | Static frontend on Vercel                      |
+| Layer                | Technology                                                |
+| -------------------- | --------------------------------------------------------- |
+| Interface            | React 19, Tailwind CSS 4                                  |
+| Build                | Vite 7, npm workspaces                                    |
+| Pose detection       | TensorFlow.js, BlazePose, WebGL                           |
+| Browser capabilities | IndexedDB, Web Audio (MediaRecorder in local development) |
+| Validation           | ESLint, Prettier, Node test runner, Playwright            |
+| Hosting              | Static frontend on Vercel                                 |
 
 ```text
 frontend/
@@ -74,34 +74,38 @@ vercel.json           Build settings and response headers
 
 The round engine is independent of React and persistence. Camera landmarks feed the classifier locally; React displays the round state. Completed summaries are saved to IndexedDB, and failed saves can be retried without duplicating a workout.
 
-All four public scripts have a purpose: `prepare-pose-models.mjs` is required by development and builds, `browser-smoke.mjs` validates the production app, `static-server.mjs` serves that build for tests, and `benchmark-classifier.mjs` measures classifier performance without recordings.
+The scripts each have a purpose: `prepare-pose-models.mjs` is required by development and builds, `browser-smoke.mjs` validates the production app, `static-server.mjs` serves that build for tests, `dev-tools-smoke.mjs` checks local-only recording/debug tools, and `benchmark-classifier.mjs` measures classifier performance without recordings.
 
 ## Privacy and browser storage
 
-Camera frames, landmarks, and recordings stay on your device. Pose models are served from the app's own origin. The interface loads display fonts from Google Fonts.
+Camera frames and landmarks stay on your device. Deployed builds do not include recording or export controls. Pose models are served from the app's own origin. The interface loads display fonts from Google Fonts.
 
-History belongs to the current browser and site origin; it is not synced or backed up. Clearing site data, private browsing cleanup, or browser eviction can remove it. Unfinished rounds and unsaved results do not survive refresh. Download recording exports before leaving the page. Different Vercel preview domains have separate histories.
+History belongs to the current browser and site origin; it is not synced or backed up. Clearing site data, private browsing cleanup, or browser eviction can remove it. Unfinished rounds and unsaved results do not survive refresh. Different Vercel preview domains have separate histories.
 
-Recordings are silent and limited to three minutes. Supported browsers use H.264 MP4, with a labeled WebM fallback; training still works if recording is unavailable. The exported video is unmirrored. Landmark timestamps describe inference samples, not encoded video frames. The labeling template uses a 30 FPS timebase: convert video to constant 30 FPS before labeling, and verify its alignment with the landmarks.
+## Local development tools
+
+`npm run dev` enables the classifier debug overlay and punch-testing recorder. Both Vercel Preview and Production deployments use `npm run build`, which removes the recorder and debug UI from the shipped JavaScript. There is no deployed toggle or URL parameter to enable them. The round engine only retains diagnostic rows when local development explicitly enables them.
+
+Local recordings are silent and limited to three minutes. Download recording exports before leaving the page. Supported browsers use H.264 MP4, with a labeled WebM fallback; training still works if recording is unavailable. The exported video is unmirrored. Landmark timestamps describe inference samples, not encoded video frames. The labeling template uses a 30 FPS timebase: convert video to constant 30 FPS before labeling, and verify its alignment with the landmarks.
 
 ## Deploy to Vercel
 
 Import this repository using these settings. Keep the **Root Directory at the repository root**, because the workspace build needs the root scripts and lockfile.
 
-| Setting               | Value                 |
-| --------------------- | --------------------- |
-| Framework Preset      | Vite                  |
-| Root Directory        | Repository root (`.`) |
-| Install Command       | `npm ci`              |
-| Build Command         | `npm run build`       |
-| Output Directory      | `frontend/dist`       |
-| Node.js Version       | 22.x                  |
-| Environment variables | None                  |
+| Setting               | Value                         |
+| --------------------- | ----------------------------- |
+| Framework Preset      | Vite                          |
+| Root Directory        | Leave blank (repository root) |
+| Install Command       | `npm ci`                      |
+| Build Command         | `npm run build`               |
+| Output Directory      | `frontend/dist`               |
+| Node.js Version       | 22.x                          |
+| Environment variables | None                          |
 
 `vercel.json` sets the commands, output directory, security headers, and caching. Hashed assets use immutable caching; model files revalidate. Missing assets return 404. The build needs access to npm and Kaggle to download dependencies and the checksum-pinned model archives.
 
-1. Create an HTTPS preview deployment and confirm both models load with a fresh browser cache.
-2. Test a real camera and audio, all four punches, each pace, combos, pause/resume/reset, and a full round. Check history after refresh and recording downloads. Verify hidden-tab pause and recovery after denying camera access or interrupting model loading.
+1. Enable Vercel Authentication with All Deployments protection while testing privately. Create a Preview deployment from `codex/vercel-guest-readiness` and confirm both models load with a fresh browser cache.
+2. Test a real camera and audio, all four punches, each pace, combos, pause/resume/reset, and a full round. Check history after refresh and confirm that recording/export and debug controls are absent. Verify hidden-tab pause and recovery after denying camera access or interrupting model loading.
 3. Test desktop Chromium, Safari/iOS, and Android Chrome before promoting the preview to production. After models load, verify a round also works offline.
 
 Vercel's deployment history can restore a previous frontend release. Browser data is separate from deployments, so keep IndexedDB schema compatibility in mind when rolling back.

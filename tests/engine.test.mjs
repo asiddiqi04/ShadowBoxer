@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createTrainingService } from '../frontend/src/training/trainingService.js'
 import { speedProfiles } from '../frontend/src/training/speedProfiles.js'
-const setup = (random = () => 0) => {
+const setup = (random = () => 0, includeDebug = false) => {
   let time = 0,
     wall = Date.UTC(2026, 9, 2),
     id = 0
@@ -10,6 +10,7 @@ const setup = (random = () => 0) => {
     now: () => time,
     wallNow: () => wall,
     random,
+    includeDebug,
     createId: () => `id-${++id}`,
   })
   return {
@@ -149,4 +150,26 @@ test('reset or new start at timeout retains a completion for exactly-once delive
     assert.equal(completed[0].durationSeconds, 180)
     assert.deepEqual(engine.takeCompletions(), [])
   }
+})
+
+test('diagnostic output is opt-in and does not change punch or combo behavior', () => {
+  const normal = setup()
+  const debug = setup(() => 0, true)
+  for (const run of [normal, debug]) {
+    run.engine.startRound('form')
+    for (const [i, x] of [120, 126, 132, 140, 260].entries()) {
+      run.advance(i ? 100 : 600)
+      run.engine.submitFrame(frame(600 + i * 100, x))
+    }
+  }
+  const { debugRows: normalRows, ...normalState } = normal.engine.getState()
+  const { debugRows, ...debugState } = debug.engine.getState()
+  assert.deepEqual(normalRows, [])
+  assert.ok(debugRows.length > 0)
+  assert.equal(normalState.punchCounts.jab, 1)
+  assert.deepEqual(normalState, debugState)
+  assert.deepEqual(
+    normal.engine.endRound().session,
+    debug.engine.endRound().session,
+  )
 })

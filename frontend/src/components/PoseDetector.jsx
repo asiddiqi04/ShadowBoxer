@@ -201,13 +201,13 @@ function PoseDetector({
       if (
         !document.hidden &&
         current.cameraReady &&
-        (current.isRunning || current.isRecording) &&
+        (current.isRunning || (import.meta.env.DEV && current.isRecording)) &&
         video?.readyState >= 2
       ) {
         const frameTime = performance.now()
         const generation = current.getGeneration()
         const mediaTime = video.currentTime
-        const capture = captureRef.current
+        const capture = import.meta.env.DEV ? captureRef.current : null
         try {
           pending = detector.estimatePoses(video, { flipHorizontal: false })
           const poses = await pending
@@ -217,14 +217,16 @@ function PoseDetector({
             ...kp,
             z: keypoints3D?.[idx]?.z ?? kp.z,
           }))
-          const recordedFrame = capture?.capture({
-            time: frameTime,
-            mediaTime,
-            keypoints,
-            keypoints3D,
-            speed: current.roundSpeed,
-            roundRunning: current.isRunning,
-          })
+          const recordedFrame = import.meta.env.DEV
+            ? capture?.capture({
+                time: frameTime,
+                mediaTime,
+                keypoints,
+                keypoints3D,
+                speed: current.roundSpeed,
+                roundRunning: current.isRunning,
+              })
+            : null
           // Inference can finish after pause/reset/resume. The engine checks the captured generation too.
           if (
             generation === live.current.getGeneration() &&
@@ -350,13 +352,15 @@ function PoseDetector({
         <div className="flex items-center gap-2">
           <span className={`status-pill ${statusStyle}`}>{status}</span>
           <span className="metric-chip">Total: {totalPunches}</span>
-          <button
-            type="button"
-            onClick={() => setShowDebugOverlay((prev) => !prev)}
-            className="rounded-md border border-cyan-300/35 bg-cyan-950/35 px-2 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:bg-cyan-900/45"
-          >
-            Debug {showDebugOverlay ? 'On' : 'Off'}
-          </button>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => setShowDebugOverlay((prev) => !prev)}
+              className="rounded-md border border-cyan-300/35 bg-cyan-950/35 px-2 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-cyan-100 transition hover:bg-cyan-900/45"
+            >
+              Debug {showDebugOverlay ? 'On' : 'Off'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -398,12 +402,14 @@ function PoseDetector({
           </button>
         )}
       </div>
-      <PoseRecording
-        webcamRef={webcamRef}
-        captureRef={captureRef}
-        modelReady={cameraReady && modelStatus === 'Ready'}
-        onRecordingChange={setIsRecording}
-      />
+      {import.meta.env.DEV && (
+        <PoseRecording
+          webcamRef={webcamRef}
+          captureRef={captureRef}
+          modelReady={cameraReady && modelStatus === 'Ready'}
+          onRecordingChange={setIsRecording}
+        />
+      )}
 
       <div className="p-3 sm:p-5">
         <div className="relative w-full overflow-hidden rounded-2xl border border-white/15 bg-black/70 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
@@ -455,14 +461,14 @@ function PoseDetector({
               </div>
             </div>
 
-            {showDebugOverlay && (
+            {import.meta.env.DEV && showDebugOverlay && (
               <div className="absolute bottom-3 right-3 z-20 w-[20rem] max-w-[calc(100%-1.5rem)] rounded-xl border border-cyan-300/35 bg-slate-950/82 p-3 text-[11px] text-cyan-50 shadow-[0_12px_24px_rgba(8,47,73,0.35)] backdrop-blur-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-cyan-200">
                     Classifier Debug
                   </span>
                   <span className="text-[0.58rem] uppercase tracking-[0.14em] text-slate-300">
-                    Backend
+                    Local engine
                   </span>
                 </div>
 

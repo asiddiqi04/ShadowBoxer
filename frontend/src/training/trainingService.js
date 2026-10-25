@@ -103,6 +103,7 @@ export const createTrainingService = ({
   wallNow = Date.now,
   random = Math.random,
   createId = () => globalThis.crypto.randomUUID(),
+  includeDebug = false,
 } = {}) => {
   let state = createReadyState(random)
   let generation = 0
@@ -275,7 +276,7 @@ export const createTrainingService = ({
     state = {
       ...state,
       frameHistory,
-      debugRows: classification.debug,
+      debugRows: includeDebug ? classification.debug : [],
     }
 
     let punchEvent = null
