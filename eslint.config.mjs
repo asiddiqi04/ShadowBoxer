@@ -9,7 +9,7 @@ export default [
   ),
   {
     files: [
-      'scripts/{prepare-pose-models,browser-smoke,static-server,benchmark-classifier}.mjs',
+      'scripts/{prepare-pose-models,browser-smoke,dev-tools-smoke,static-server,benchmark-classifier}.mjs',
       'tests/*.mjs',
       'eslint.config.mjs',
     ],
@@ -18,7 +18,7 @@ export default [
   },
   {
     // Playwright's page callbacks execute inside the browser.
-    files: ['scripts/browser-smoke.mjs'],
+    files: ['scripts/browser-smoke.mjs', 'scripts/dev-tools-smoke.mjs'],
     languageOptions: { globals: globals.browser },
   },
 ]

@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test'
 import assert from 'node:assert/strict'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serveBuild } from './static-server.mjs'
@@ -9,6 +9,15 @@ const buildRoot = path.resolve(
   process.env.BUILD_DIR ??
     fileURLToPath(new URL('../frontend/dist/', import.meta.url)),
 )
+// Production artifacts must not ship the recording implementation or debug UI.
+for (const file of await readdir(path.join(buildRoot, 'assets'))) {
+  if (!file.endsWith('.js')) continue
+  const source = await readFile(path.join(buildRoot, 'assets', file), 'utf8')
+  assert.doesNotMatch(
+    source,
+    /MediaRecorder|Record punches for tuning|Classifier Debug|Download landmarks/,
+  )
+}
 const { server, url } = await serveBuild(buildRoot)
 let browser
 const requests = [],
@@ -46,6 +55,14 @@ try {
         return readPixels.apply(this, args)
       }
     }
+    window.__cameraRequests = 0
+    const getUserMedia = navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices,
+    )
+    navigator.mediaDevices.getUserMedia = (...args) => {
+      window.__cameraRequests++
+      return getUserMedia(...args)
+    }
     const open = indexedDB.open.bind(indexedDB)
     indexedDB.open = (...args) => {
       if (window.__failStorage)
@@ -59,10 +76,42 @@ try {
   const page = await context.newPage()
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(url)
+  // The opening menu must not touch the camera; only Start training may request it.
+  await expect(
+    page.getByRole('button', { name: 'Start training', exact: true }),
+  ).toBeVisible()
+  await page.waitForTimeout(1000)
+  assert.equal(await page.evaluate(() => window.__cameraRequests), 0)
+  await expect(page.locator('video')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('switch', { name: 'Sound effects' }).uncheck()
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.reload()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(
+    page.getByRole('switch', { name: 'Sound effects' }),
+  ).not.toBeChecked()
+  await page.getByRole('switch', { name: 'Sound effects' }).check()
+  await page.keyboard.press('Escape')
+  console.log('PASS menu defers camera access; settings persist across reloads')
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     page.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
-  await expect(page.getByRole('button', { name: 'Debug Off' })).toBeVisible()
+  assert.ok((await page.evaluate(() => window.__cameraRequests)) >= 1)
+  await expect(page.getByRole('button', { name: /^Debug / })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Record punches', exact: true }),
+  ).toHaveCount(0)
+  await expect(page.getByText('Classifier Debug', { exact: true })).toHaveCount(
+    0,
+  )
+  await expect(page.getByRole('link', { name: /^Download / })).toHaveCount(0)
+  console.log(
+    'PASS production build excludes recording/export implementation and debug controls',
+  )
   if (process.env.SMOKE_SCREENSHOT)
     await page.screenshot({
       path: process.env.SMOKE_SCREENSHOT,
@@ -135,25 +184,31 @@ try {
     window.__failStorage = false
   })
   await page.getByRole('button', { name: 'Retry storage', exact: true }).click()
-  await expect(page.getByText('2 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('2 rounds saved', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Start Round', exact: true }).click()
   await page.evaluate(() => {
     window.__offset += 180001
   })
   await expect(page.getByText('Round Complete', { exact: true })).toBeVisible()
-  await expect(page.getByText('3 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('3 rounds saved', { exact: true })).toBeVisible()
   console.log(
     'PASS offline start/pause/resume/end, failed save retained across rounds, retry, elapsed-time expiry',
   )
   await context.setOffline(false)
   await page.reload()
-  await expect(page.getByText('3 stored', { exact: true })).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
+  await expect(page.getByText('3 rounds saved', { exact: true })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
   const second = await context.newPage()
   second.on('pageerror', (error) => errors.push(error.message))
   await second.goto(url)
+  await second
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     second.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
@@ -183,31 +238,10 @@ try {
     second.getByText('Workout saved in this browser.', { exact: true }),
   ).toBeVisible()
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-  await expect(page.getByText('5 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('5 rounds saved', { exact: true })).toBeVisible()
   await second.close()
   console.log(
     'PASS refresh history, independent tabs, concurrent saves and hidden-tab explicit-resume policy',
-  )
-  await page
-    .getByRole('button', { name: 'Record punches', exact: true })
-    .click()
-  await page.waitForTimeout(5000)
-  await page
-    .getByRole('button', { name: 'Stop recording', exact: true })
-    .click()
-  await expect(
-    page.getByRole('link', { name: 'Download landmarks', exact: true }),
-  ).toBeVisible()
-  const data = await page
-    .getByRole('link', { name: 'Download landmarks', exact: true })
-    .evaluate(async (a) => (await fetch(a.href)).json())
-  assert.equal(data.video.audio, false)
-  assert.ok(data.summary.samples > 0, 'Real inference must complete')
-  assert.ok(
-    data.frames.every((frame, i) => !i || frame.time > data.frames[i - 1].time),
-  )
-  console.log(
-    `PASS local recording/export: ${data.video.mimeType}, ${data.summary.samples} samples, ${data.summary.inferenceFps.toFixed(2)} inference FPS, camera-reported ${data.video.cameraFps} FPS`,
   )
   await page.getByRole('button', { name: 'Start Round', exact: true }).click()
   await page.evaluate(() => {
@@ -251,28 +285,16 @@ try {
   await page.getByRole('button', { name: 'End', exact: true }).click()
   console.log('PASS inference failure auto-pause and model retry')
   if (process.env.FULL_ROUND_SMOKE === '1') {
-    console.log(
-      'Starting real-time 180-second offline round and recording limit check…',
-    )
+    console.log('Starting real-time 180-second offline round check…')
     await context.setOffline(true)
+    const started = Date.now()
     await page.getByRole('button', { name: 'Start Round', exact: true }).click()
-    await page
-      .getByRole('button', { name: 'Record punches', exact: true })
-      .click()
     await expect(page.getByText('Round Complete', { exact: true })).toBeVisible(
       { timeout: 195000 },
     )
-    await expect(
-      page.getByRole('button', { name: 'Record punches', exact: true }),
-    ).toBeEnabled({ timeout: 10000 })
-    const recording = await page
-      .getByRole('link', { name: 'Download landmarks', exact: true })
-      .evaluate(async (a) => (await fetch(a.href)).json())
-    assert.ok(recording.durationMs >= 180000 && recording.durationMs < 182000)
-    assert.ok(recording.frames.every((frame) => frame.time <= 180000))
-    console.log(
-      `PASS real-time offline round/recording expiry: ${recording.durationMs.toFixed(0)}ms, ${recording.summary.samples} samples, ${recording.summary.inferenceFps.toFixed(2)} inference FPS`,
-    )
+    const elapsed = Date.now() - started
+    assert.ok(elapsed >= 180000 && elapsed < 195000)
+    console.log(`PASS real-time offline round expiry: ${elapsed}ms`)
     await context.setOffline(false)
   }
   assert.equal(
@@ -304,32 +326,18 @@ try {
       },
       'Camera unavailable or in use.',
     ],
-    [
-      'unsupported recorder',
-      () => {
-        window.MediaRecorder = undefined
-      },
-      'Recording is unsupported in this browser.',
-    ],
   ]) {
     const ctx = await browser.newContext({ permissions: ['camera'] })
     await ctx.addInitScript(init)
     const p = await ctx.newPage()
     await p.goto(url)
+    await p.getByRole('button', { name: 'Start training', exact: true }).click()
     await expect(p.getByText(text, { exact: false })).toBeVisible({
       timeout: 90000,
     })
-    if (name === 'unsupported recorder') {
-      await expect(
-        p.getByRole('button', { name: 'Start Round', exact: true }),
-      ).toBeEnabled({ timeout: 90000 })
-      await expect(
-        p.getByRole('button', { name: 'Record punches', exact: true }),
-      ).toBeDisabled()
-    } else
-      await expect(
-        p.getByRole('button', { name: 'Start Round', exact: true }),
-      ).toBeDisabled()
+    await expect(
+      p.getByRole('button', { name: 'Start Round', exact: true }),
+    ).toBeDisabled()
     await ctx.close()
     console.log(`PASS ${name}`)
   }
@@ -347,6 +355,9 @@ try {
   })
   const graphicsPage = await graphics.newPage()
   await graphicsPage.goto(url)
+  await graphicsPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     graphicsPage.getByText('Cannot load the pose model.', { exact: false }),
   ).toBeVisible({ timeout: 90000 })
@@ -355,37 +366,39 @@ try {
   ).toBeDisabled()
   await graphics.close()
   console.log('PASS unavailable WebGL recovery message')
-  const fallback = await browser.newContext({ permissions: ['camera'] })
-  await fallback.addInitScript(() => {
-    const supported = MediaRecorder.isTypeSupported.bind(MediaRecorder)
-    MediaRecorder.isTypeSupported = (type) =>
-      !type.includes('mp4') && supported(type)
+  const noRecorder = await browser.newContext({ permissions: ['camera'] })
+  await noRecorder.addInitScript(() => {
+    Object.defineProperty(window, 'MediaRecorder', {
+      get() {
+        throw new Error('Production must not access recording APIs')
+      },
+    })
   })
-  const fallbackPage = await fallback.newPage()
-  await fallbackPage.goto(url)
+  const noRecorderPage = await noRecorder.newPage()
+  const recorderErrors = []
+  noRecorderPage.on('pageerror', (error) => recorderErrors.push(error.message))
+  await noRecorderPage.goto(url)
+  await noRecorderPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
-    fallbackPage.getByRole('button', { name: 'Record punches', exact: true }),
+    noRecorderPage.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
-  await fallbackPage
-    .getByRole('button', { name: 'Record punches', exact: true })
-    .click()
-  await fallbackPage.waitForTimeout(1200)
-  await fallbackPage
-    .getByRole('button', { name: 'Stop recording', exact: true })
+  await noRecorderPage
+    .getByRole('button', { name: 'Start Round', exact: true })
     .click()
   await expect(
-    fallbackPage.getByRole('link', { name: 'Download WEBM', exact: true }),
+    noRecorderPage.getByText('Round Live', { exact: true }),
   ).toBeVisible()
-  const fallbackData = await fallbackPage
-    .getByRole('link', { name: 'Download landmarks', exact: true })
-    .evaluate(async (a) => (await fetch(a.href)).json())
-  assert.match(fallbackData.video.mimeType, /webm/)
-  await fallback.close()
-  console.log('PASS labeled WebM fallback with matching metadata')
+  await noRecorderPage.getByRole('button', { name: 'End', exact: true }).click()
+  assert.deepEqual(recorderErrors, [])
+  await noRecorder.close()
+  console.log('PASS production training never accesses MediaRecorder')
   const ctx = await browser.newContext({ permissions: ['camera'] })
   await ctx.route('**/models/**', (route) => route.abort())
   const p = await ctx.newPage()
   await p.goto(url)
+  await p.getByRole('button', { name: 'Start training', exact: true }).click()
   await expect(
     p.getByText('Cannot load the pose model.', { exact: false }),
   ).toBeVisible({ timeout: 90000 })
