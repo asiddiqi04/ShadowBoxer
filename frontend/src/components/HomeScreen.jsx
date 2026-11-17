@@ -7,7 +7,7 @@ const steps = [
   },
   {
     title: 'Pick a pace',
-    body: 'Form, Casual, or Intense. Every round runs three minutes.',
+    body: 'Form, Casual, or Intense, and a round from 30 seconds to 10 minutes.',
   },
   {
     title: 'Throw the call',
@@ -91,6 +91,7 @@ function GuestSync({ auth, onOpenSettings }) {
 function HomeScreen({
   onStart,
   onOpenSettings,
+  onOpenHistory,
   stats,
   historyLabel,
   auth,
@@ -157,7 +158,17 @@ function HomeScreen({
           <h2 className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">
             Your progress
           </h2>
-          <span className="text-xs text-slate-400">{historyLabel}</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-slate-400 sm:inline">
+              {historyLabel}
+            </span>
+            <button
+              className="action-btn action-btn-ghost py-1.5 text-xs"
+              onClick={onOpenHistory}
+            >
+              View history →
+            </button>
+          </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-y-4 sm:grid-cols-4 sm:divide-x sm:divide-white/10">
           <Stat label="Rounds" value={stats.rounds} />

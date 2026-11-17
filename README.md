@@ -5,7 +5,7 @@ ShadowBoxer turns a webcam into an interactive boxing trainer. Practice orthodox
 ## Features
 
 - Real-time pose tracking and punch feedback, with separate sounds for registered punches and incorrect combo moves.
-- Three-minute rounds with Form, Casual, and Intense pacing, plus pause, resume, and reset controls.
+- Rounds from 30 seconds to 10 minutes (30-second steps, 3 minutes by default) with Form, Casual, and Intense pacing, plus pause, resume, and reset controls.
 - Combo progress, punch counts, and workout summaries saved in your browser, or in your account when you sign in.
 - An opening menu that requests camera access only after you choose **Start training**.
 - Settings for sound effects and round music (on/off and volume), remembered on each device.
@@ -83,7 +83,7 @@ The scripts each have a purpose: `prepare-pose-models.mjs` is required by develo
 
 Signed-in users' completed workout summaries are stored in the `workout_sessions` table. Row-level security limits each user to their own rows. Rows can be read, added, and deleted, but never edited. Guests keep using IndexedDB. After signing in, a guest is offered a one-time import of their browser history. Duplicates are skipped, and a copy stays in the browser.
 
-1. Create a Supabase project. In the SQL editor, run `supabase/migrations/20261116000000_workout_sessions.sql`, or use `supabase db push` with the Supabase CLI.
+1. Create a Supabase project. In the SQL editor, run each file in `supabase/migrations/` in filename order, or use `supabase db push` with the Supabase CLI.
 2. Copy `frontend/.env.example` to `frontend/.env.local` and fill in the project URL and the **anon/publishable** key from Project Settings → API. Never use the `service_role` key in the frontend.
 3. Under Authentication → URL Configuration, set the Site URL to your production domain. Add `http://localhost:5173/**` and your Vercel preview pattern (for example, `https://*-<team>.vercel.app/**`) to Redirect URLs.
 4. Google sign-in: create a Google Cloud OAuth client (type: web application). Add `https://<project-ref>.supabase.co/auth/v1/callback` as an authorized redirect URI, then paste the client ID and secret into Authentication → Providers → Google.

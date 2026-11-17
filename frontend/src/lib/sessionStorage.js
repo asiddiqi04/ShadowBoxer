@@ -1,4 +1,5 @@
 import { isValidSpeed } from '../training/speedProfiles.js'
+import { isValidRoundLength } from '../training/roundLength.js'
 
 const isNonNegativeInteger = (value) =>
   Number.isSafeInteger(value) && value >= 0
@@ -13,10 +14,10 @@ export const validateSession = (session) => {
         typeof session[key] === 'string' &&
         Number.isFinite(Date.parse(session[key])),
     ) ||
-    session.roundDurationSeconds !== 180 ||
+    !isValidRoundLength(session.roundDurationSeconds) ||
     !Number.isFinite(session.durationSeconds) ||
     session.durationSeconds < 0 ||
-    session.durationSeconds > 180 ||
+    session.durationSeconds > session.roundDurationSeconds ||
     !['succeeded', 'failed', 'total'].every((key) =>
       isNonNegativeInteger(session.comboStats?.[key]),
     ) ||

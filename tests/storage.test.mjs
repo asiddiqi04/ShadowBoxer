@@ -75,3 +75,21 @@ test('unavailable storage does not break the engine; failed completions survive 
   queue.add(first)
   assert.equal(calls, 4)
 })
+test('saved sessions must stay within their chosen round length', async () => {
+  const { validateSession } =
+    await import('../frontend/src/lib/sessionStorage.js')
+  const base = session('length')
+  assert.doesNotThrow(() =>
+    validateSession({
+      ...base,
+      roundDurationSeconds: 600,
+      durationSeconds: 450,
+    }),
+  )
+  for (const bad of [
+    { roundDurationSeconds: 600, durationSeconds: 601 },
+    { roundDurationSeconds: 45, durationSeconds: 10 },
+    { roundDurationSeconds: 660, durationSeconds: 10 },
+  ])
+    assert.throws(() => validateSession({ ...base, ...bad }), /Invalid/)
+})

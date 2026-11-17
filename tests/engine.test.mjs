@@ -173,3 +173,30 @@ test('diagnostic output is opt-in and does not change punch or combo behavior', 
     debug.engine.endRound().session,
   )
 })
+test('custom round lengths time out, save, and survive reset', async () => {
+  const { validateSession } =
+    await import('../frontend/src/lib/sessionStorage.js')
+  const { engine, advance } = setup()
+  const started = engine.startRound('intense', 90)
+  assert.equal(started.round.durationSeconds, 90)
+  assert.equal(started.round.timeLeftSeconds, 90)
+  advance(95000)
+  const completed = engine.getState().session.completedSession
+  assert.equal(completed.roundDurationSeconds, 90)
+  assert.equal(completed.durationSeconds, 90)
+  assert.deepEqual(validateSession(completed), completed)
+  engine.resetRound()
+  assert.equal(engine.getState().round.durationSeconds, 90)
+  engine.startRound('casual', 600)
+  advance(400000)
+  assert.equal(engine.getState().round.timeLeftSeconds, 200)
+  assert.equal(engine.endRound().session.durationSeconds, 400)
+})
+test('invalid round lengths are rejected without touching the running round', () => {
+  const { engine } = setup()
+  for (const seconds of [0, 15, 45, 630, 179.5, '180'])
+    assert.throws(() => engine.startRound('casual', seconds), /round length/)
+  const running = engine.startRound('casual', 30)
+  assert.throws(() => engine.startRound('casual', 45), /round length/)
+  assert.equal(engine.getState().round.id, running.round.id)
+})

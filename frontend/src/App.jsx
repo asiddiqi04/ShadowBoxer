@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Timer from './components/Timer'
-import ComboDisplay from './components/ComboDisplay'
 import PoseDetector from './components/PoseDetector'
-import SessionHistory from './components/SessionHistory'
+import TrainingHud from './components/TrainingHud'
+import RoundSetup from './components/RoundSetup'
+import HistoryScreen from './components/HistoryScreen'
 import HomeScreen from './components/HomeScreen'
 import SettingsDialog from './components/SettingsDialog'
 import ImportPrompt from './components/ImportPrompt'
@@ -11,6 +11,7 @@ import { createCloudSessionStorage } from './lib/cloudSessionStorage'
 import { loadSettings, saveSettings } from './lib/settings'
 import { summarizeWorkouts } from './lib/workoutStats'
 import { createTrainingService } from './training/trainingService'
+import { DEFAULT_ROUND_SECONDS } from './training/roundLength'
 import { createCompletionQueue } from './lib/completionQueue'
 import { usePunchSound } from './hooks/usePunchSound'
 import { hasMusicTrack, useRoundMusic } from './hooks/useRoundMusic'
@@ -45,6 +46,7 @@ function App() {
   )
   const [trainingState, setTrainingState] = useState(() => engine.getState())
   const [selectedSpeed, setSelectedSpeed] = useState('casual')
+  const [roundSeconds, setRoundSeconds] = useState(DEFAULT_ROUND_SECONDS)
   const [trainingError, setTrainingError] = useState('')
   const [trackingReady, setTrackingReady] = useState(false)
   const [showRoundToast, setShowRoundToast] = useState(false)
@@ -189,7 +191,7 @@ function App() {
     if (trackingReady && !document.hidden) {
       unlockPunchSound()
       unlockMusic()
-      run(() => engine.startRound(selectedSpeed))
+      run(() => engine.startRound(selectedSpeed, roundSeconds))
     }
   }
   const handleRoundResume = () => {
@@ -284,41 +286,66 @@ function App() {
     />
   )
 
-  if (view === 'home')
+  const historyLabel = signedIn
+    ? 'Synced to your account'
+    : 'Saved in this browser'
+  const retryHistory = () => {
+    void queue.retry()
+    void loadSavedSessions()
+  }
+
+  if (view === 'home' || view === 'history')
     return (
       <div className="app-shell">
-        <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-          <HomeScreen
-            onStart={() => setView('train')}
-            onOpenSettings={openSettings}
-            stats={stats}
-            historyLabel={
-              signedIn ? 'Synced to your account' : 'Saved in this browser'
-            }
-            auth={auth}
-            importPrompt={<ImportPrompt guestImport={guestImport} />}
-          />
+        <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+          {view === 'home' ? (
+            <HomeScreen
+              onStart={() => setView('train')}
+              onOpenSettings={openSettings}
+              onOpenHistory={() => setView('history')}
+              stats={stats}
+              historyLabel={historyLabel}
+              auth={auth}
+              importPrompt={<ImportPrompt guestImport={guestImport} />}
+            />
+          ) : (
+            <HistoryScreen
+              sessions={savedSessions}
+              stats={stats}
+              historyLabel={historyLabel}
+              error={historyError}
+              onRetry={retryHistory}
+              onBack={() => setView('home')}
+            />
+          )}
         </main>
         {settingsDialog}
       </div>
     )
 
+  const roundActive = roundStatus === 'running' || roundStatus === 'paused'
+  const saveToneClass = {
+    error: 'bg-rose-400',
+    saving: 'bg-amber-300',
+    ready: 'bg-emerald-400',
+  }[sessionStatus.tone]
+
   return (
     <div className="app-shell">
-      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-        <header className="panel-card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex items-center gap-4">
+      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
+        <header className="mx-auto mb-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <button
               className="action-btn action-btn-ghost"
               onClick={exitTraining}
             >
               ← Menu
             </button>
-            <h1 className="display-title text-3xl text-orange-50 sm:text-4xl">
-              ShadowBoxer
+            <h1 className="display-title hidden text-2xl tracking-[0.12em] text-orange-50 sm:block">
+              Shadow<span className="text-orange-400">Boxer</span>
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className={`status-pill ${headerStatusClass}`}>
               {headerStatusText}
             </span>
@@ -332,66 +359,98 @@ function App() {
         </header>
 
         {trainingError && (
-          <div className="mb-6 rounded-xl border border-rose-300/35 bg-rose-950/35 px-4 py-3 text-sm text-rose-100">
+          <div className="mb-4 rounded-xl border border-rose-300/35 bg-rose-950/35 px-4 py-3 text-sm text-rose-100">
             Training issue: {trainingError}
           </div>
         )}
 
-        <div className="grid flex-1 gap-6 xl:grid-cols-[21rem_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-6">
-            <Timer
-              round={trainingState.round}
-              canStart={trackingReady}
-              selectedSpeed={selectedSpeed}
-              onSpeedChange={setSelectedSpeed}
-              onRoundEnd={handleRoundEnd}
-              onRoundPause={handleRoundPause}
-              onRoundReset={handleRoundReset}
-              onRoundResume={handleRoundResume}
-              onRoundStart={handleRoundStart}
-            />
-            <ComboDisplay
-              isRunning={isRunning}
-              currentCombo={trainingState.currentCombo}
-              comboStepIndex={trainingState.comboStepIndex}
-              comboStats={trainingState.comboStats}
-              comboResult={trainingState.comboResult}
-              lastPunchEvent={trainingState.lastPunchEvent}
-            />
-            <SessionHistory
-              sessions={savedSessions}
-              signedIn={signedIn}
-              statusMessage={sessionStatus.message}
-              statusTone={sessionStatus.tone}
-              onRetry={
-                failed || historyError
-                  ? () => {
-                      void queue.retry()
-                      void loadSavedSessions()
-                    }
-                  : null
-              }
-            />
-          </aside>
+        <PoseDetector
+          onReadyChange={handleTrackingReady}
+          getGeneration={engine.getGeneration}
+          debugRows={trainingState.debugRows}
+          isRunning={isRunning}
+          onPoseFrame={handlePoseFrame}
+          frameIntervalMs={trainingState.round.frameIntervalMs}
+          roundSpeed={trainingState.round.speed}
+          hud={roundActive && <TrainingHud trainingState={trainingState} />}
+          panel={
+            !roundActive && (
+              <div className="mt-4 flex justify-center lg:absolute lg:inset-0 lg:mt-0 lg:items-center lg:rounded-3xl lg:bg-slate-950/60 lg:p-6 lg:backdrop-blur-sm">
+                <RoundSetup
+                  selectedSpeed={selectedSpeed}
+                  onSpeedChange={setSelectedSpeed}
+                  roundSeconds={roundSeconds}
+                  onRoundSecondsChange={setRoundSeconds}
+                  onStart={handleRoundStart}
+                  canStart={trackingReady}
+                  lastRound={
+                    roundStatus === 'ended'
+                      ? {
+                          punchCounts: trainingState.punchCounts,
+                          comboStats: trainingState.comboStats,
+                        }
+                      : null
+                  }
+                />
+              </div>
+            )
+          }
+        />
 
-          <section className="min-w-0">
-            <PoseDetector
-              onReadyChange={handleTrackingReady}
-              getGeneration={engine.getGeneration}
-              debugRows={trainingState.debugRows}
-              isRunning={isRunning}
-              lastPunchEvent={trainingState.lastPunchEvent}
-              onPoseFrame={handlePoseFrame}
-              frameIntervalMs={trainingState.round.frameIntervalMs}
-              roundSpeed={trainingState.round.speed}
-              punchCounts={trainingState.punchCounts}
+        <div className="mx-auto mt-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] flex-wrap items-center justify-between gap-3">
+          <p className="flex min-w-0 items-center gap-2 text-xs text-slate-300">
+            <span
+              aria-hidden="true"
+              className={`h-2 w-2 shrink-0 rounded-full ${saveToneClass ?? 'bg-slate-400'}`}
             />
-          </section>
+            <span>{sessionStatus.message}</span>
+            <span className="text-slate-500">
+              {savedSessions.length === 1
+                ? '1 round saved'
+                : `${savedSessions.length} rounds saved`}
+            </span>
+            {(failed || historyError) && (
+              <button
+                className="action-btn action-btn-secondary ml-1"
+                onClick={retryHistory}
+              >
+                Retry storage
+              </button>
+            )}
+          </p>
+          {roundActive && (
+            <div className="flex flex-wrap gap-2">
+              {roundStatus === 'paused' ? (
+                <button
+                  disabled={!trackingReady}
+                  onClick={handleRoundResume}
+                  className="action-btn action-btn-primary px-6 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Resume
+                </button>
+              ) : (
+                <button
+                  onClick={handleRoundPause}
+                  className="action-btn action-btn-warning px-6"
+                >
+                  Pause
+                </button>
+              )}
+              <button
+                onClick={handleRoundEnd}
+                className="action-btn action-btn-secondary"
+              >
+                End
+              </button>
+              <button
+                onClick={handleRoundReset}
+                className="action-btn action-btn-ghost"
+              >
+                Reset
+              </button>
+            </div>
+          )}
         </div>
-
-        <footer className="mt-6 text-center text-xs uppercase tracking-[0.16em] text-slate-400 sm:mt-8">
-          Keep your guard up, reset your stance, and throw clean shots.
-        </footer>
       </main>
 
       {showRoundToast && (

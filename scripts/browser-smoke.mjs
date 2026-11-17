@@ -184,13 +184,13 @@ try {
     window.__failStorage = false
   })
   await page.getByRole('button', { name: 'Retry storage', exact: true }).click()
-  await expect(page.getByText('2 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('2 rounds saved', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Start Round', exact: true }).click()
   await page.evaluate(() => {
     window.__offset += 180001
   })
   await expect(page.getByText('Round Complete', { exact: true })).toBeVisible()
-  await expect(page.getByText('3 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('3 rounds saved', { exact: true })).toBeVisible()
   console.log(
     'PASS offline start/pause/resume/end, failed save retained across rounds, retry, elapsed-time expiry',
   )
@@ -199,7 +199,7 @@ try {
   await page
     .getByRole('button', { name: 'Start training', exact: true })
     .click()
-  await expect(page.getByText('3 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('3 rounds saved', { exact: true })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
@@ -238,7 +238,7 @@ try {
     second.getByText('Workout saved in this browser.', { exact: true }),
   ).toBeVisible()
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-  await expect(page.getByText('5 stored', { exact: true })).toBeVisible()
+  await expect(page.getByText('5 rounds saved', { exact: true })).toBeVisible()
   await second.close()
   console.log(
     'PASS refresh history, independent tabs, concurrent saves and hidden-tab explicit-resume policy',

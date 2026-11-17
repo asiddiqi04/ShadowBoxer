@@ -11,8 +11,9 @@ import {
   getSpeedProfile,
   isValidSpeed,
 } from './speedProfiles.js'
+import { DEFAULT_ROUND_SECONDS, isValidRoundLength } from './roundLength.js'
 
-export const ROUND_SECONDS = 180
+export const ROUND_SECONDS = DEFAULT_ROUND_SECONDS
 const maxFrameHistory = 40
 
 export class TrainingError extends Error {
@@ -22,11 +23,15 @@ export class TrainingError extends Error {
   }
 }
 
-const createReadyState = (random = Math.random, speed = DEFAULT_SPEED) => ({
+const createReadyState = (
+  random = Math.random,
+  speed = DEFAULT_SPEED,
+  roundDurationSeconds = DEFAULT_ROUND_SECONDS,
+) => ({
   id: null,
   status: 'ready',
   speed,
-  roundDurationSeconds: ROUND_SECONDS,
+  roundDurationSeconds,
   startedAt: null,
   startedAtMs: null,
   endedAt: null,
@@ -119,7 +124,7 @@ export const createTrainingService = ({
       endedAt: state.endedAt,
       roundDurationSeconds: state.roundDurationSeconds,
       durationSeconds: Math.min(
-        ROUND_SECONDS,
+        state.roundDurationSeconds,
         elapsedMsForState(state, now()) / 1000,
       ),
       comboStats: { ...state.comboStats },
@@ -142,7 +147,7 @@ export const createTrainingService = ({
       endedAtMs:
         state.startedAtMs +
         state.pausedDurationMs +
-        Math.min(elapsed, ROUND_SECONDS * 1000),
+        Math.min(elapsed, state.roundDurationSeconds * 1000),
       frameHistory: [],
       pausedAtMs: null,
       comboLockedUntil: null,
@@ -167,9 +172,17 @@ export const createTrainingService = ({
     return snapshot()
   }
 
-  const startRound = (speed = DEFAULT_SPEED) => {
+  const startRound = (
+    speed = DEFAULT_SPEED,
+    roundSeconds = DEFAULT_ROUND_SECONDS,
+  ) => {
     if (!isValidSpeed(speed)) {
       throw new TrainingError('Choose a round speed: form, casual, or intense.')
+    }
+    if (!isValidRoundLength(roundSeconds)) {
+      throw new TrainingError(
+        'Choose a round length between 30 seconds and 10 minutes, in 30-second steps.',
+      )
     }
     refreshState()
     if (state.status === 'running' || state.status === 'paused')
@@ -177,7 +190,7 @@ export const createTrainingService = ({
     const nowMs = now()
     generation += 1
     state = {
-      ...createReadyState(random, speed),
+      ...createReadyState(random, speed, roundSeconds),
       id: createId(),
       status: 'running',
       startedAt: new Date(wallNow()).toISOString(),
@@ -228,7 +241,7 @@ export const createTrainingService = ({
   const resetRound = () => {
     refreshState()
     generation += 1
-    state = createReadyState(random, state.speed)
+    state = createReadyState(random, state.speed, state.roundDurationSeconds)
     return snapshot()
   }
 
