@@ -21,6 +21,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  background-color: var(--bg-end);
+}
+
 body {
   margin: 0;
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;

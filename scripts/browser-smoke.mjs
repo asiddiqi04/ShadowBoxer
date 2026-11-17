@@ -55,6 +55,14 @@ try {
         return readPixels.apply(this, args)
       }
     }
+    window.__cameraRequests = 0
+    const getUserMedia = navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices,
+    )
+    navigator.mediaDevices.getUserMedia = (...args) => {
+      window.__cameraRequests++
+      return getUserMedia(...args)
+    }
     const open = indexedDB.open.bind(indexedDB)
     indexedDB.open = (...args) => {
       if (window.__failStorage)
@@ -68,9 +76,31 @@ try {
   const page = await context.newPage()
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(url)
+  // The opening menu must not touch the camera; only Start training may request it.
+  await expect(
+    page.getByRole('button', { name: 'Start training', exact: true }),
+  ).toBeVisible()
+  await page.waitForTimeout(1000)
+  assert.equal(await page.evaluate(() => window.__cameraRequests), 0)
+  await expect(page.locator('video')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('switch', { name: 'Sound effects' }).uncheck()
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  await page.reload()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await expect(
+    page.getByRole('switch', { name: 'Sound effects' }),
+  ).not.toBeChecked()
+  await page.getByRole('switch', { name: 'Sound effects' }).check()
+  await page.keyboard.press('Escape')
+  console.log('PASS menu defers camera access; settings persist across reloads')
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     page.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
+  assert.ok((await page.evaluate(() => window.__cameraRequests)) >= 1)
   await expect(page.getByRole('button', { name: /^Debug / })).toHaveCount(0)
   await expect(
     page.getByRole('button', { name: 'Record punches', exact: true }),
@@ -166,6 +196,9 @@ try {
   )
   await context.setOffline(false)
   await page.reload()
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(page.getByText('3 stored', { exact: true })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Start Round', exact: true }),
@@ -173,6 +206,9 @@ try {
   const second = await context.newPage()
   second.on('pageerror', (error) => errors.push(error.message))
   await second.goto(url)
+  await second
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     second.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
@@ -295,6 +331,7 @@ try {
     await ctx.addInitScript(init)
     const p = await ctx.newPage()
     await p.goto(url)
+    await p.getByRole('button', { name: 'Start training', exact: true }).click()
     await expect(p.getByText(text, { exact: false })).toBeVisible({
       timeout: 90000,
     })
@@ -318,6 +355,9 @@ try {
   })
   const graphicsPage = await graphics.newPage()
   await graphicsPage.goto(url)
+  await graphicsPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     graphicsPage.getByText('Cannot load the pose model.', { exact: false }),
   ).toBeVisible({ timeout: 90000 })
@@ -338,6 +378,9 @@ try {
   const recorderErrors = []
   noRecorderPage.on('pageerror', (error) => recorderErrors.push(error.message))
   await noRecorderPage.goto(url)
+  await noRecorderPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     noRecorderPage.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
@@ -355,6 +398,7 @@ try {
   await ctx.route('**/models/**', (route) => route.abort())
   const p = await ctx.newPage()
   await p.goto(url)
+  await p.getByRole('button', { name: 'Start training', exact: true }).click()
   await expect(
     p.getByText('Cannot load the pose model.', { exact: false }),
   ).toBeVisible({ timeout: 90000 })

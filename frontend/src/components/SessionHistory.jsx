@@ -20,7 +20,13 @@ const formatAccuracy = (comboStats) => {
   return `${percent}% accuracy`
 }
 
-function SessionHistory({ sessions, statusMessage, statusTone, onRetry }) {
+function SessionHistory({
+  sessions,
+  signedIn = false,
+  statusMessage,
+  statusTone,
+  onRetry,
+}) {
   const statusToneClass =
     {
       loading: 'border-cyan-300/35 bg-cyan-950/25 text-cyan-100',
@@ -50,8 +56,9 @@ function SessionHistory({ sessions, statusMessage, statusTone, onRetry }) {
       </div>
 
       <p className="mt-3 text-xs text-slate-400">
-        History stays in this browser, is not synced, and can be lost when site
-        data is cleared.
+        {signedIn
+          ? 'History is saved to your account and available on any device you sign in on.'
+          : 'History stays in this browser, is not synced, and can be lost when site data is cleared.'}
       </p>
       {onRetry && (
         <button
@@ -105,8 +112,8 @@ function SessionHistory({ sessions, statusMessage, statusTone, onRetry }) {
           ))
         ) : (
           <div className="rounded-xl border border-white/12 bg-slate-950/45 px-4 py-5 text-sm text-slate-300">
-            No saved rounds yet. Finish a session and it will be written to this
-            browser automatically.
+            No saved rounds yet. Finish a session and it will be saved{' '}
+            {signedIn ? 'to your account' : 'in this browser'} automatically.
           </div>
         )}
       </div>

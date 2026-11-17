@@ -4,8 +4,15 @@ import incorrectPunchSoundUrl from '../assets/sounds/incorrect-punch-3.mp3'
 
 const soundUrls = { punch: punchSoundUrl, incorrect: incorrectPunchSoundUrl }
 
-export function usePunchSound() {
+export function usePunchSound({ enabled = true, volume = 1 } = {}) {
   const audioRef = useRef(null)
+  const optionsRef = useRef({ enabled, volume })
+
+  useEffect(() => {
+    optionsRef.current = { enabled, volume }
+    const gain = audioRef.current?.gain
+    if (gain) gain.gain.value = volume
+  }, [enabled, volume])
 
   useEffect(() => {
     const AudioContext = window.AudioContext || window.webkitAudioContext
@@ -17,7 +24,10 @@ export function usePunchSound() {
     } catch {
       return
     }
-    const audio = { context, buffers: {} }
+    const gain = context.createGain()
+    gain.gain.value = optionsRef.current.volume
+    gain.connect(context.destination)
+    const audio = { context, gain, buffers: {} }
     const controller = new AbortController()
     audioRef.current = audio
 
@@ -52,6 +62,7 @@ export function usePunchSound() {
 
   const play = useCallback((punchEvent) => {
     const audio = audioRef.current
+    if (!optionsRef.current.enabled) return
     // A locked combo ignores punches; it must not produce another failure cue.
     const incorrect =
       punchEvent?.expected && !punchEvent.matched && !punchEvent.comboLocked
@@ -61,7 +72,7 @@ export function usePunchSound() {
       // A fresh source lets fast successive punches overlap without cutting off tails.
       const source = audio.context.createBufferSource()
       source.buffer = buffer
-      source.connect(audio.context.destination)
+      source.connect(audio.gain)
       source.onended = () => source.disconnect()
       source.start()
     } catch {

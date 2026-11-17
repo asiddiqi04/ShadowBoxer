@@ -35,6 +35,9 @@ try {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(url)
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   const recordButton = page.getByRole('button', {
     name: 'Record punches',
     exact: true,
@@ -94,6 +97,9 @@ try {
   })
   const unsupportedPage = await unsupported.newPage()
   await unsupportedPage.goto(url)
+  await unsupportedPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     unsupportedPage.getByText('Recording is unsupported in this browser.', {
       exact: false,
@@ -119,6 +125,9 @@ try {
   })
   const fallbackPage = await fallback.newPage()
   await fallbackPage.goto(url)
+  await fallbackPage
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
   await expect(
     fallbackPage.getByRole('button', { name: 'Record punches', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
