@@ -1,20 +1,5 @@
 import { useState } from 'react'
 
-const steps = [
-  {
-    title: 'Set up your space',
-    body: 'Stand 1.5–2 m back with head, shoulders, and hips in frame.',
-  },
-  {
-    title: 'Pick a pace',
-    body: 'Form, Casual, or Intense, and a round from 30 seconds to 10 minutes.',
-  },
-  {
-    title: 'Throw the call',
-    body: 'Follow the combo prompts in orthodox stance as punches register live.',
-  },
-]
-
 function GearIcon() {
   return (
     <svg
@@ -46,44 +31,62 @@ function Stat({ label, value }) {
   )
 }
 
-function GuestSync({ auth, onOpenSettings }) {
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 48 48" className="h-4 w-4">
+      <path
+        fill="#FFC107"
+        d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"
+      />
+      <path
+        fill="#FF3D00"
+        d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"
+      />
+      <path
+        fill="#4CAF50"
+        d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"
+      />
+      <path
+        fill="#1976D2"
+        d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"
+      />
+    </svg>
+  )
+}
+
+function GoogleSignIn({ auth }) {
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   if (!auth.available || auth.loading || auth.user) return null
-  const google = async () => {
+  const signIn = async () => {
     setError('')
+    setBusy(true)
     try {
       await auth.signInWithGoogle()
     } catch (signInError) {
       setError(signInError.message)
+      setBusy(false)
     }
   }
   return (
-    <div className="mt-6 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-sm text-slate-300">
-        Keep your rounds safe.{' '}
-        <span className="text-slate-400">
-          Sign in to sync your history across devices.
-        </span>
-        {error && (
-          <span role="status" className="mt-1 block text-xs text-rose-200">
-            {error}
-          </span>
-        )}
-      </p>
-      <div className="flex shrink-0 gap-2">
-        <button
-          className="action-btn action-btn-secondary"
-          onClick={() => void google()}
+    <div className="relative">
+      <button
+        className="inline-flex items-center gap-2 rounded-[0.72rem] bg-white px-3.5 py-[0.58rem] text-[0.82rem] font-semibold text-slate-900 transition hover:bg-slate-100 disabled:opacity-60"
+        disabled={busy}
+        onClick={() => void signIn()}
+      >
+        <GoogleIcon />
+        <span className="hidden sm:inline">Sign in with Google</span>
+        <span className="sm:hidden">Sign in</span>
+      </button>
+      {error && (
+        <p
+          role="status"
+          className="absolute right-0 top-full mt-2 w-64 rounded-lg bg-rose-950/90 px-3 py-2 text-xs text-rose-100"
         >
-          Continue with Google
-        </button>
-        <button
-          className="action-btn action-btn-ghost"
-          onClick={onOpenSettings}
-        >
-          Use email
-        </button>
-      </div>
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -100,75 +103,57 @@ function HomeScreen({
   const email = auth.user?.email
   return (
     <div className="flex flex-1 flex-col">
-      <nav className="flex items-center justify-between gap-4">
-        <span className="display-title text-2xl tracking-[0.12em] text-orange-50">
-          Shadow<span className="text-orange-400">Boxer</span>
-        </span>
-        <div className="flex items-center gap-2">
-          {email && (
-            <span
-              className="hidden items-center gap-2 rounded-full border border-white/12 bg-slate-950/50 py-1 pl-1 pr-3 text-xs text-slate-200 sm:inline-flex"
-              title={email}
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-rose-500 text-[0.7rem] font-bold uppercase text-white">
-                {email[0]}
-              </span>
-              <span className="max-w-[12rem] truncate">{email}</span>
-            </span>
-          )}
-          <button
-            className="action-btn action-btn-ghost inline-flex items-center gap-2"
-            onClick={onOpenSettings}
+      <nav className="flex items-center justify-end gap-2">
+        {email && (
+          <span
+            className="hidden items-center gap-2 rounded-full border border-white/12 bg-slate-950/50 py-1 pl-1 pr-3 text-xs text-slate-200 sm:inline-flex"
+            title={email}
           >
-            <GearIcon />
-            Settings
-          </button>
-        </div>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-rose-500 text-[0.7rem] font-bold uppercase text-white">
+              {email[0]}
+            </span>
+            <span className="max-w-[12rem] truncate">{email}</span>
+          </span>
+        )}
+        <GoogleSignIn auth={auth} />
+        <button
+          className="action-btn action-btn-ghost inline-flex items-center gap-2"
+          onClick={onOpenSettings}
+        >
+          <GearIcon />
+          Settings
+        </button>
       </nav>
 
-      <section className="py-14 text-center sm:py-20 lg:py-24">
-        <div className="mx-auto flex max-w-3xl flex-col items-center">
-          <p className="text-xs uppercase tracking-[0.28em] text-cyan-200/85">
-            Realtime striking lab
-          </p>
-          <h1 className="display-title mt-4 text-6xl leading-[0.9] text-orange-50 sm:text-7xl lg:text-8xl">
-            Your webcam is
-            <br />
-            <span className="bg-gradient-to-r from-orange-400 via-amber-300 to-rose-400 bg-clip-text text-transparent">
-              your corner coach
-            </span>
-          </h1>
-          <p className="mt-6 max-w-xl text-base text-slate-300 sm:text-lg">
-            Throw combos, get instant feedback on every jab, cross, hook, and
-            uppercut, and build rhythm round after round.
-          </p>
-          <button
-            className="action-btn action-btn-primary mt-8 px-8 py-4 text-base"
-            onClick={onStart}
-          >
-            Start training
-          </button>
-        </div>
+      <section className="flex flex-col items-center py-16 text-center sm:py-24">
+        <h1 className="display-title text-6xl leading-none tracking-[0.06em] text-orange-50 sm:text-8xl lg:text-9xl">
+          Shadow<span className="text-orange-400">Boxer</span>
+        </h1>
+        <p className="mt-4 max-w-md text-base text-slate-300 sm:text-lg">
+          Shadowbox in front of your webcam and see every punch counted.
+        </p>
+        <button
+          className="action-btn action-btn-primary mt-8 px-10 py-4 text-base"
+          onClick={onStart}
+        >
+          Start training
+        </button>
       </section>
 
       {importPrompt}
 
-      <section className="panel-card mt-2 p-6 sm:p-8">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">
+      <section className="panel-card p-6 sm:p-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xs uppercase tracking-[0.22em] text-slate-400">
             Your progress
           </h2>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-slate-400 sm:inline">
-              {historyLabel}
-            </span>
-            <button
-              className="action-btn action-btn-ghost py-1.5 text-xs"
-              onClick={onOpenHistory}
-            >
-              View history →
-            </button>
-          </div>
+          <button
+            className="text-xs font-semibold text-slate-300 transition hover:text-white"
+            onClick={onOpenHistory}
+            title={historyLabel}
+          >
+            View history →
+          </button>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-y-4 sm:grid-cols-4 sm:divide-x sm:divide-white/10">
           <Stat label="Rounds" value={stats.rounds} />
@@ -183,31 +168,6 @@ function HomeScreen({
             }
           />
         </div>
-        {!stats.rounds && (
-          <p className="mt-4 text-sm text-slate-400">
-            Finish your first round to start tracking progress.
-          </p>
-        )}
-        <GuestSync auth={auth} onOpenSettings={onOpenSettings} />
-      </section>
-
-      <section className="mt-12 pb-4">
-        <h2 className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">
-          How it works
-        </h2>
-        <ol className="mt-5 grid gap-6 sm:grid-cols-3">
-          {steps.map((step, index) => (
-            <li key={step.title} className="border-t border-white/12 pt-4">
-              <span className="display-title text-2xl text-orange-400">
-                0{index + 1}
-              </span>
-              <p className="mt-1 text-sm font-semibold text-white">
-                {step.title}
-              </p>
-              <p className="mt-1.5 text-sm text-slate-400">{step.body}</p>
-            </li>
-          ))}
-        </ol>
       </section>
     </div>
   )

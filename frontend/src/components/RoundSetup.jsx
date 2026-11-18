@@ -211,7 +211,7 @@ function RoundSetup({
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400">
-          Orthodox stance (left jab, right cross)
+          Stand about 2 m back, upper body in frame · Orthodox stance
         </p>
         <button
           disabled={!canStart}
