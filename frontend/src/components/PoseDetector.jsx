@@ -5,6 +5,8 @@ import '@tensorflow/tfjs-backend-webgl'
 import * as tf from '@tensorflow/tfjs-core'
 import PoseRecording from './PoseRecording'
 import { poseModelConfig } from '../lib/poseModelConfig'
+import { usePreloadProgress } from '../hooks/usePreloadProgress'
+import LoadingBar from './LoadingBar'
 
 const videoConstraints = {
   width: 640,
@@ -302,6 +304,7 @@ function PoseDetector({
   }, [modelAttempt])
 
   const modelLoading = !modelError && modelStatus !== 'Ready'
+  const preload = usePreloadProgress()
 
   return (
     <section className="flex flex-col gap-3 stage:fixed stage:inset-0 stage:z-0 stage:gap-2 stage:px-3 stage:pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
@@ -339,7 +342,19 @@ function PoseDetector({
           role="status"
           className="relative z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 stage:bg-slate-950/85"
         >
-          <span>{!cameraReady ? cameraStatus : 'Loading the pose model…'}</span>
+          {!cameraReady ? (
+            <span>{cameraStatus}</span>
+          ) : (
+            // Download progress while the preload runs, then a sweep while the model warms up.
+            <LoadingBar
+              label={
+                preload.phase === 'loading'
+                  ? 'Downloading the pose model'
+                  : 'Loading the pose model'
+              }
+              percent={preload.phase === 'loading' ? preload.percent : null}
+            />
+          )}
           {!cameraReady && (
             <button
               type="button"

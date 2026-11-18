@@ -449,7 +449,14 @@ function App() {
           panel={
             !roundActive &&
             !countdown && (
-              <div className="absolute inset-0 z-10 flex overflow-y-auto rounded-3xl bg-slate-950/60 p-4 backdrop-blur-sm sm:p-6 stage:rounded-none stage:px-3 stage:pb-24 stage:pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.75rem))]">
+              <div
+                className={`absolute inset-0 z-10 flex overflow-y-auto rounded-3xl bg-slate-950/60 p-4 backdrop-blur-sm sm:p-6 stage:rounded-none stage:px-3 stage:pb-24 ${
+                  // Phones: leave room for the camera/model loading status above the setup card.
+                  trackingReady
+                    ? 'stage:pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.75rem))]'
+                    : 'stage:pt-[max(9rem,calc(env(safe-area-inset-top)+8.25rem))]'
+                }`}
+              >
                 <div className="m-auto w-full max-w-xl">
                   <RoundSetup
                     selectedSpeed={selectedSpeed}

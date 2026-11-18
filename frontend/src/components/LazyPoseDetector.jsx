@@ -1,5 +1,7 @@
 import { Component, Suspense, lazy, useState } from 'react'
 import { loadPoseDetector } from '../lib/preloadTraining'
+import { usePreloadProgress } from '../hooks/usePreloadProgress'
+import LoadingBar from './LoadingBar'
 
 const stageClass =
   'relative mx-auto flex aspect-[4/3] w-full max-w-[calc((100svh-12rem)*4/3)] items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-slate-950/70 p-6 text-center text-sm text-slate-300 stage:fixed stage:inset-0 stage:aspect-auto stage:max-w-none stage:rounded-none stage:border-0'
@@ -27,6 +29,19 @@ class LoadBoundary extends Component {
   }
 }
 
+function LoadingStage() {
+  const { phase, percent } = usePreloadProgress()
+  return (
+    <div className={stageClass} role="status">
+      <LoadingBar
+        className="max-w-xs"
+        label="Loading training"
+        percent={phase === 'loading' ? percent : null}
+      />
+    </div>
+  )
+}
+
 // PoseDetector pulls in TensorFlow.js; keep it out of the menu's bundle.
 function LazyPoseDetector(props) {
   const [attempt, setAttempt] = useState(0)
@@ -37,13 +52,7 @@ function LazyPoseDetector(props) {
   }
   return (
     <LoadBoundary key={attempt} onRetry={retry}>
-      <Suspense
-        fallback={
-          <div className={stageClass} role="status">
-            Loading training…
-          </div>
-        }
-      >
+      <Suspense fallback={<LoadingStage />}>
         <Detector {...props} />
       </Suspense>
     </LoadBoundary>
