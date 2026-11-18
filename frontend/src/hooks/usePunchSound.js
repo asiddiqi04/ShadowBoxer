@@ -80,5 +80,34 @@ export function usePunchSound({ enabled = true, volume = 1 } = {}) {
     }
   }, [])
 
-  return { unlock, play }
+  // Countdown beeps are synthesized, so they need no extra audio files.
+  const cue = useCallback((kind) => {
+    const audio = audioRef.current
+    if (!optionsRef.current.enabled || audio?.context.state !== 'running')
+      return
+    try {
+      const { context } = audio
+      const start = context.currentTime
+      const length = kind === 'go' ? 0.45 : 0.15
+      const oscillator = context.createOscillator()
+      const envelope = context.createGain()
+      oscillator.type = 'square'
+      oscillator.frequency.value = kind === 'go' ? 1320 : 880
+      envelope.gain.setValueAtTime(0.0001, start)
+      envelope.gain.exponentialRampToValueAtTime(0.25, start + 0.01)
+      envelope.gain.exponentialRampToValueAtTime(0.0001, start + length)
+      oscillator.connect(envelope)
+      envelope.connect(audio.gain)
+      oscillator.onended = () => {
+        oscillator.disconnect()
+        envelope.disconnect()
+      }
+      oscillator.start(start)
+      oscillator.stop(start + length)
+    } catch {
+      /* A missing audio device must never block the round. */
+    }
+  }, [])
+
+  return { unlock, play, cue }
 }

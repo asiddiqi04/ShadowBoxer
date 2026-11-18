@@ -76,6 +76,7 @@ function PoseDetector({
   frameIntervalMs = 50,
   roundSpeed = 'casual',
   isRunning,
+  previewing = false,
   onPoseFrame,
   hud = null,
   panel = null,
@@ -96,6 +97,7 @@ function PoseDetector({
   useEffect(() => {
     live.current = {
       isRunning,
+      previewing,
       isRecording,
       cameraReady,
       frameIntervalMs,
@@ -106,6 +108,7 @@ function PoseDetector({
     }
   }, [
     isRunning,
+    previewing,
     isRecording,
     cameraReady,
     frameIntervalMs,
@@ -179,7 +182,10 @@ function PoseDetector({
       if (
         !document.hidden &&
         current.cameraReady &&
-        (current.isRunning || (import.meta.env.DEV && current.isRecording)) &&
+        // The countdown runs inference without scoring: it warms up the model and shows the skeleton.
+        (current.isRunning ||
+          current.previewing ||
+          (import.meta.env.DEV && current.isRecording)) &&
         video?.readyState >= 2
       ) {
         const frameTime = performance.now()
@@ -298,7 +304,7 @@ function PoseDetector({
   const modelLoading = !modelError && modelStatus !== 'Ready'
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3 stage:fixed stage:inset-0 stage:z-0 stage:gap-2 stage:px-3 stage:pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
       {import.meta.env.DEV && (
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -314,7 +320,7 @@ function PoseDetector({
       {modelError && (
         <div
           role="alert"
-          className="rounded-2xl border border-rose-300/30 bg-rose-950/40 px-4 py-3"
+          className="relative z-20 rounded-2xl border border-rose-300/30 bg-rose-950/40 px-4 py-3 stage:bg-rose-950/90"
         >
           <p className="text-sm text-rose-100">Pose tracking is unavailable.</p>
           <p className="mt-1 break-words text-xs text-rose-200">{modelError}</p>
@@ -331,7 +337,7 @@ function PoseDetector({
       {(!cameraReady || modelLoading) && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200"
+          className="relative z-20 flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 stage:bg-slate-950/85"
         >
           <span>{!cameraReady ? cameraStatus : 'Loading the pose model…'}</span>
           {!cameraReady && (
@@ -360,8 +366,8 @@ function PoseDetector({
         />
       )}
 
-      <div className="relative mx-auto w-full min-w-0 max-w-[calc((100svh-12rem)*4/3)]">
-        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-white/12 bg-black shadow-[0_24px_60px_rgba(0,0,0,0.5)]">
+      <div className="relative mx-auto w-full min-w-0 max-w-[calc((100svh-12rem)*4/3)] stage:absolute stage:inset-0 stage:max-w-none">
+        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-white/12 bg-black shadow-[0_24px_60px_rgba(0,0,0,0.5)] stage:aspect-auto stage:h-full stage:rounded-none stage:border-0">
           <Webcam
             key={cameraAttempt}
             ref={webcamRef}
@@ -372,12 +378,12 @@ function PoseDetector({
             width={640}
             height={480}
             videoConstraints={videoConstraints}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover short:object-contain"
           />
           <canvas
             ref={canvasRef}
-            className="pointer-events-none absolute inset-0"
-            style={{ width: '100%', height: '100%' }}
+            // Cropped exactly like the video (object-cover) so the skeleton stays aligned.
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover short:object-contain"
           />
           {hud}
           {import.meta.env.DEV && showDebugOverlay && (

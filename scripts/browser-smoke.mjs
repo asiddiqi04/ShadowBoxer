@@ -19,6 +19,28 @@ for (const file of await readdir(path.join(buildRoot, 'assets'))) {
   )
 }
 const { server, url } = await serveBuild(buildRoot)
+// Resume also counts down; same clock jump.
+const resumeRound = async (p) => {
+  await p.getByRole('button', { name: 'Resume', exact: true }).click()
+  await expect(p.getByText('Get Ready', { exact: true })).toBeVisible()
+  await p.evaluate(() => {
+    if (typeof window.__offset === 'number') window.__offset += 5000
+  })
+  await expect(p.getByText('Round Live', { exact: true })).toBeVisible({
+    timeout: 10000,
+  })
+}
+// Start Round opens a 5-second countdown; jump the page clock past it when the test clock is installed.
+const startRound = async (p) => {
+  await p.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await expect(p.getByText('Get Ready', { exact: true })).toBeVisible()
+  await p.evaluate(() => {
+    if (typeof window.__offset === 'number') window.__offset += 5000
+  })
+  await expect(p.getByText('Round Live', { exact: true })).toBeVisible({
+    timeout: 10000,
+  })
+}
 let browser
 const requests = [],
   errors = []
@@ -153,8 +175,19 @@ try {
   console.log(
     'PASS model manifests/shards, missing-asset 404s and startup readiness',
   )
-  await context.setOffline(true)
   await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await expect(page.getByText('Get Ready', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Get in your stance', { exact: true }),
+  ).toBeVisible()
+  await page.waitForTimeout(1200)
+  await expect(page.getByText('Round Live', { exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.getByText('Round Ready', { exact: true })).toBeVisible()
+  await expect(page.getByText('0 rounds saved', { exact: true })).toBeVisible()
+  console.log('PASS countdown precedes the round and can be cancelled')
+  await context.setOffline(true)
+  await startRound(page)
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()
   page.once('dialog', (dialog) => dialog.dismiss())
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
@@ -165,7 +198,7 @@ try {
   const clock = await page.locator('h2').first().textContent()
   await page.waitForTimeout(1200)
   assert.equal(await page.locator('h2').first().textContent(), clock)
-  await page.getByRole('button', { name: 'Resume', exact: true }).click()
+  await resumeRound(page)
   await page.evaluate(() => {
     window.__failStorage = true
   })
@@ -177,7 +210,7 @@ try {
       .count(),
     0,
   )
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   await expect(page.getByText(/completed workout\(s\) not saved/)).toBeVisible()
   await page.getByRole('button', { name: 'End', exact: true }).click()
   await page.evaluate(() => {
@@ -185,7 +218,7 @@ try {
   })
   await page.getByRole('button', { name: 'Retry storage', exact: true }).click()
   await expect(page.getByText('2 rounds saved', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   await page.evaluate(() => {
     window.__offset += 180001
   })
@@ -212,7 +245,7 @@ try {
   await expect(
     second.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   await expect(second.getByText('Round Ready', { exact: true })).toBeVisible()
   // Headless tabs do not reliably generate OS visibility changes: dispatch the browser event explicitly.
   await page.evaluate(() => {
@@ -228,8 +261,8 @@ try {
     document.dispatchEvent(new Event('visibilitychange'))
   })
   await expect(page.getByText('Round Paused', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Resume', exact: true }).click()
-  await second.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await resumeRound(page)
+  await startRound(second)
   await Promise.all([
     page.getByRole('button', { name: 'End', exact: true }).click(),
     second.getByRole('button', { name: 'End', exact: true }).click(),
@@ -243,7 +276,7 @@ try {
   console.log(
     'PASS refresh history, independent tabs, concurrent saves and hidden-tab explicit-resume policy',
   )
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   await page.evaluate(() => {
     const track = document.querySelector('video').srcObject.getVideoTracks()[0]
     track.stop()
@@ -259,12 +292,12 @@ try {
   ).toBeEnabled({ timeout: 30000 })
   await page.getByRole('button', { name: 'End', exact: true }).click()
   console.log('PASS camera disconnect auto-pause and retry')
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   page.once('dialog', (dialog) => dialog.accept())
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await expect(page.getByText('Round Ready', { exact: true })).toBeVisible()
   console.log('PASS reset confirmation/cancellation')
-  await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+  await startRound(page)
   await page.evaluate(() => {
     window.__failInference = true
   })
@@ -288,7 +321,7 @@ try {
     console.log('Starting real-time 180-second offline round check…')
     await context.setOffline(true)
     const started = Date.now()
-    await page.getByRole('button', { name: 'Start Round', exact: true }).click()
+    await page.getByRole('button', { name: 'Start Round', exact: true }).click() // real-time countdown
     await expect(page.getByText('Round Complete', { exact: true })).toBeVisible(
       { timeout: 195000 },
     )
@@ -384,9 +417,7 @@ try {
   await expect(
     noRecorderPage.getByRole('button', { name: 'Start Round', exact: true }),
   ).toBeEnabled({ timeout: 90000 })
-  await noRecorderPage
-    .getByRole('button', { name: 'Start Round', exact: true })
-    .click()
+  await startRound(noRecorderPage)
   await expect(
     noRecorderPage.getByText('Round Live', { exact: true }),
   ).toBeVisible()

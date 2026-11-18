@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PoseDetector from './components/PoseDetector'
 import TrainingHud from './components/TrainingHud'
+import Countdown from './components/Countdown'
 import RoundSetup from './components/RoundSetup'
 import HistoryScreen from './components/HistoryScreen'
 import HomeScreen from './components/HomeScreen'
@@ -17,6 +18,8 @@ import { usePunchSound } from './hooks/usePunchSound'
 import { hasMusicTrack, useRoundMusic } from './hooks/useRoundMusic'
 import { useAuth } from './hooks/useAuth'
 import { useGuestImport } from './hooks/useGuestImport'
+
+const COUNTDOWN_SECONDS = 5
 
 function App() {
   const [settings, setSettings] = useState(loadSettings)
@@ -37,7 +40,11 @@ function App() {
   const storage = auth.loading ? null : (cloudStorage ?? browserHistory)
   const storageRef = useRef(null)
   const signedIn = Boolean(cloudStorage)
-  const { unlock: unlockPunchSound, play: playPunchSound } = usePunchSound({
+  const {
+    unlock: unlockPunchSound,
+    play: playPunchSound,
+    cue: playCue,
+  } = usePunchSound({
     enabled: settings.soundEffects,
     volume: settings.soundEffectsVolume,
   })
@@ -47,6 +54,9 @@ function App() {
   const [trainingState, setTrainingState] = useState(() => engine.getState())
   const [selectedSpeed, setSelectedSpeed] = useState('casual')
   const [roundSeconds, setRoundSeconds] = useState(DEFAULT_ROUND_SECONDS)
+  // Countdown before starting or resuming: { endsAt, action, speed, seconds }, else null.
+  const [countdown, setCountdown] = useState(null)
+  const [countdownLeft, setCountdownLeft] = useState(COUNTDOWN_SECONDS)
   const [trainingError, setTrainingError] = useState('')
   const [trackingReady, setTrackingReady] = useState(false)
   const [showRoundToast, setShowRoundToast] = useState(false)
@@ -140,7 +150,9 @@ function App() {
       void loadSavedSessions()
     }
     const onHidden = () => {
-      if (document.hidden) run(engine.pauseRound)
+      if (!document.hidden) return
+      setCountdown(null)
+      run(engine.pauseRound)
     }
     const onLeave = (event) => {
       const status = engine.getState().round.status
@@ -183,7 +195,9 @@ function App() {
   const handleTrackingReady = useCallback(
     (ready) => {
       setTrackingReady(ready)
-      if (!ready && engine.getState().round.isRunning) run(engine.pauseRound)
+      if (ready) return
+      setCountdown(null)
+      if (engine.getState().round.isRunning) run(engine.pauseRound)
     },
     [engine, run],
   )
@@ -191,17 +205,58 @@ function App() {
     if (trackingReady && !document.hidden) {
       unlockPunchSound()
       unlockMusic()
-      run(() => engine.startRound(selectedSpeed, roundSeconds))
+      setCountdownLeft(COUNTDOWN_SECONDS)
+      setCountdown({
+        endsAt: performance.now() + COUNTDOWN_SECONDS * 1000,
+        action: 'start',
+        speed: selectedSpeed,
+        seconds: roundSeconds,
+      })
     }
   }
+  const cancelCountdown = () => setCountdown(null)
+  useEffect(() => {
+    if (!countdown) return
+    let shown = null
+    // Returns true once the round has started.
+    const tick = () => {
+      const left = Math.ceil((countdown.endsAt - performance.now()) / 1000)
+      if (left <= 0) {
+        setCountdown(null)
+        playCue('go')
+        run(() =>
+          countdown.action === 'resume'
+            ? engine.resumeRound()
+            : engine.startRound(countdown.speed, countdown.seconds),
+        )
+        return true
+      }
+      if (left !== shown) {
+        shown = left
+        setCountdownLeft(left)
+        if (left <= 3) playCue('tick')
+      }
+      return false
+    }
+    if (tick()) return
+    const timer = setInterval(() => {
+      if (tick()) clearInterval(timer)
+    }, 100)
+    return () => clearInterval(timer)
+  }, [countdown, engine, run, playCue])
   const handleRoundResume = () => {
     if (trackingReady && !document.hidden) {
       unlockPunchSound()
       unlockMusic()
-      run(engine.resumeRound)
+      setCountdownLeft(COUNTDOWN_SECONDS)
+      setCountdown({
+        endsAt: performance.now() + COUNTDOWN_SECONDS * 1000,
+        action: 'resume',
+      })
     }
   }
   const openSettings = () => {
+    setCountdown(null)
     if (engine.getState().round.isRunning) run(engine.pauseRound)
     setSettingsOpen(true)
   }
@@ -214,6 +269,7 @@ function App() {
       )
     )
       return
+    setCountdown(null)
     if (roundStatus !== 'ready') run(engine.resetRound)
     // Unmounting the detector stops the camera; it is requested again on return.
     setTrackingReady(false)
@@ -262,19 +318,21 @@ function App() {
 
   const headerStatusClass = trainingError
     ? 'status-pill-error'
-    : isRunning
+    : isRunning || countdown
       ? 'status-pill-live'
       : 'status-pill-idle'
 
   const headerStatusText = trainingError
     ? 'Training Issue'
-    : isRunning
-      ? 'Round Live'
-      : roundStatus === 'paused'
-        ? 'Round Paused'
-        : roundStatus === 'ended'
-          ? 'Round Complete'
-          : 'Round Ready'
+    : countdown
+      ? 'Get Ready'
+      : isRunning
+        ? 'Round Live'
+        : roundStatus === 'paused'
+          ? 'Round Paused'
+          : roundStatus === 'ended'
+            ? 'Round Complete'
+            : 'Round Ready'
 
   const settingsDialog = settingsOpen && (
     <SettingsDialog
@@ -332,8 +390,8 @@ function App() {
 
   return (
     <div className="app-shell">
-      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
-        <header className="mx-auto mb-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] items-center justify-between gap-3">
+      <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8 stage:h-[100svh] stage:min-h-0 stage:overflow-hidden stage:p-0">
+        <header className="mx-auto mb-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] items-center justify-between gap-3 stage:fixed stage:inset-x-0 stage:top-0 stage:z-30 stage:mb-0 stage:max-w-none stage:bg-gradient-to-b stage:from-black/75 stage:to-transparent stage:px-3 stage:pb-8 stage:pt-[max(0.75rem,env(safe-area-inset-top))]">
           <div className="flex items-center gap-3">
             <button
               className="action-btn action-btn-ghost"
@@ -341,12 +399,12 @@ function App() {
             >
               ← Menu
             </button>
-            <h1 className="display-title hidden text-2xl tracking-[0.12em] text-orange-50 sm:block">
+            <h1 className="display-title hidden text-2xl tracking-[0.12em] text-orange-50 sm:block stage:hidden">
               Shadow<span className="text-orange-400">Boxer</span>
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`status-pill ${headerStatusClass}`}>
+            <span className={`status-pill ${headerStatusClass} stage:hidden`}>
               {headerStatusText}
             </span>
             <button
@@ -359,7 +417,7 @@ function App() {
         </header>
 
         {trainingError && (
-          <div className="mb-4 rounded-xl border border-rose-300/35 bg-rose-950/35 px-4 py-3 text-sm text-rose-100">
+          <div className="mb-4 rounded-xl border border-rose-300/35 bg-rose-950/35 px-4 py-3 text-sm text-rose-100 stage:fixed stage:inset-x-3 stage:top-16 stage:z-30">
             Training issue: {trainingError}
           </div>
         )}
@@ -369,36 +427,46 @@ function App() {
           getGeneration={engine.getGeneration}
           debugRows={trainingState.debugRows}
           isRunning={isRunning}
+          previewing={Boolean(countdown)}
           onPoseFrame={handlePoseFrame}
           frameIntervalMs={trainingState.round.frameIntervalMs}
           roundSpeed={trainingState.round.speed}
-          hud={roundActive && <TrainingHud trainingState={trainingState} />}
+          hud={
+            countdown ? (
+              <Countdown secondsLeft={countdownLeft} />
+            ) : (
+              roundActive && <TrainingHud trainingState={trainingState} />
+            )
+          }
           panel={
-            !roundActive && (
-              <div className="mt-4 flex justify-center lg:absolute lg:inset-0 lg:mt-0 lg:items-center lg:rounded-3xl lg:bg-slate-950/60 lg:p-6 lg:backdrop-blur-sm">
-                <RoundSetup
-                  selectedSpeed={selectedSpeed}
-                  onSpeedChange={setSelectedSpeed}
-                  roundSeconds={roundSeconds}
-                  onRoundSecondsChange={setRoundSeconds}
-                  onStart={handleRoundStart}
-                  canStart={trackingReady}
-                  lastRound={
-                    roundStatus === 'ended'
-                      ? {
-                          punchCounts: trainingState.punchCounts,
-                          comboStats: trainingState.comboStats,
-                        }
-                      : null
-                  }
-                />
+            !roundActive &&
+            !countdown && (
+              <div className="absolute inset-0 z-10 flex overflow-y-auto rounded-3xl bg-slate-950/60 p-4 backdrop-blur-sm sm:p-6 stage:rounded-none stage:px-3 stage:pb-24 stage:pt-[max(4.5rem,calc(env(safe-area-inset-top)+3.75rem))]">
+                <div className="m-auto w-full max-w-xl">
+                  <RoundSetup
+                    selectedSpeed={selectedSpeed}
+                    onSpeedChange={setSelectedSpeed}
+                    roundSeconds={roundSeconds}
+                    onRoundSecondsChange={setRoundSeconds}
+                    onStart={handleRoundStart}
+                    canStart={trackingReady}
+                    lastRound={
+                      roundStatus === 'ended'
+                        ? {
+                            punchCounts: trainingState.punchCounts,
+                            comboStats: trainingState.comboStats,
+                          }
+                        : null
+                    }
+                  />
+                </div>
               </div>
             )
           }
         />
 
-        <div className="mx-auto mt-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] flex-wrap items-center justify-between gap-3">
-          <p className="flex min-w-0 items-center gap-2 text-xs text-slate-300">
+        <div className="mx-auto mt-4 flex w-full max-w-[calc((100svh-12rem)*4/3)] flex-wrap items-center justify-between gap-3 stage:fixed stage:inset-x-0 stage:bottom-0 stage:z-30 stage:mt-0 stage:max-w-none stage:flex-col-reverse stage:flex-nowrap stage:items-stretch stage:gap-2 stage:bg-gradient-to-t stage:from-black/80 stage:to-transparent stage:px-3 stage:pt-10 stage:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <p className="flex min-w-0 items-center gap-2 text-xs text-slate-300 stage:justify-center stage:text-[0.7rem]">
             <span
               aria-hidden="true"
               className={`h-2 w-2 shrink-0 rounded-full ${saveToneClass ?? 'bg-slate-400'}`}
@@ -418,8 +486,18 @@ function App() {
               </button>
             )}
           </p>
-          {roundActive && (
-            <div className="flex flex-wrap gap-2">
+          {countdown && (
+            <div className="flex flex-wrap gap-2 stage:mx-auto stage:grid stage:w-full stage:max-w-lg stage:[&>button]:py-3 stage:[&>button]:text-sm">
+              <button
+                onClick={cancelCountdown}
+                className="action-btn action-btn-ghost px-6"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {roundActive && !countdown && (
+            <div className="flex flex-wrap gap-2 stage:mx-auto stage:grid stage:w-full stage:max-w-lg stage:grid-cols-3 stage:[&>button]:py-3 stage:[&>button]:text-sm">
               {roundStatus === 'paused' ? (
                 <button
                   disabled={!trackingReady}

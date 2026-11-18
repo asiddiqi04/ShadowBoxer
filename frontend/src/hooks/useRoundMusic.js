@@ -14,6 +14,7 @@ export const hasMusicTrack = Boolean(musicTrackUrl)
 // Music follows the round: plays while running, pauses with it, rewinds when it ends.
 export function useRoundMusic({ enabled, volume, roundStatus }) {
   const audioRef = useRef(null)
+  const playingRef = useRef(false)
 
   const getAudio = useCallback(() => {
     if (!musicTrackUrl) return null
@@ -26,18 +27,26 @@ export function useRoundMusic({ enabled, volume, roundStatus }) {
     return audioRef.current
   }, [])
 
-  // Call from the Start/Resume click so mobile autoplay rules allow playback.
+  // Call from the Start/Resume click so mobile autoplay rules allow playback later.
+  // If the round has not started yet (e.g. during the countdown), stay silent.
   const unlock = useCallback(() => {
     if (!enabled) return
     const audio = getAudio()
-    if (audio) void audio.play().catch(() => {})
+    if (!audio) return
+    void audio
+      .play()
+      .then(() => {
+        if (!playingRef.current) audio.pause()
+      })
+      .catch(() => {})
   }, [enabled, getAudio])
 
   useEffect(() => {
     const audio = audioRef.current ?? (enabled ? getAudio() : null)
     if (!audio) return
     audio.volume = volume
-    if (enabled && roundStatus === 'running') {
+    playingRef.current = enabled && roundStatus === 'running'
+    if (playingRef.current) {
       void audio.play().catch(() => {
         /* Blocked autoplay or decode failure must never affect training. */
       })

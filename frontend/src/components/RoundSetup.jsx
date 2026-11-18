@@ -130,7 +130,7 @@ function RoundSetup({
     : '—'
 
   return (
-    <div className="panel-card w-full max-w-xl p-5 sm:p-6">
+    <div className="panel-card w-full max-w-xl p-4 sm:p-6">
       {lastRound && (
         <div className="mb-5 border-b border-white/10 pb-5">
           <h3 className="display-title text-3xl text-orange-50">
@@ -170,7 +170,7 @@ function RoundSetup({
         <legend className="text-sm font-semibold text-white">
           Choose your pace
         </legend>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           {paces.map((pace) => (
             <label key={pace.value} className="group cursor-pointer">
               <input
@@ -181,19 +181,19 @@ function RoundSetup({
                 onChange={() => onSpeedChange(pace.value)}
                 className="peer sr-only"
               />
-              <span className="relative flex h-full flex-col rounded-2xl border-2 border-white/12 bg-white/[0.04] p-4 transition group-hover:border-white/35 group-hover:bg-white/[0.08] peer-checked:border-orange-400 peer-checked:bg-orange-500/15 peer-checked:shadow-[0_0_0_4px_rgba(249,115,22,0.15)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cyan-200">
-                <span className="display-title text-2xl tracking-[0.06em] text-white">
+              <span className="relative flex h-full flex-col rounded-2xl border-2 border-white/12 bg-white/[0.04] p-3 transition sm:p-4 group-hover:border-white/35 group-hover:bg-white/[0.08] peer-checked:border-orange-400 peer-checked:bg-orange-500/15 peer-checked:shadow-[0_0_0_4px_rgba(249,115,22,0.15)] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cyan-200">
+                <span className="display-title text-xl tracking-[0.06em] text-white sm:text-2xl">
                   {pace.label}
                 </span>
-                <span className="mt-1 text-xs text-slate-300">
+                <span className="mt-1 hidden text-xs text-slate-300 sm:block short:hidden">
                   {pace.blurb}
                 </span>
-                <span className="mt-3 text-[0.65rem] uppercase tracking-[0.12em] text-slate-400">
+                <span className="mt-1 text-[0.6rem] uppercase tracking-[0.1em] text-slate-400 sm:mt-3 sm:text-[0.65rem] sm:tracking-[0.12em]">
                   {comboGap(pace.value)}
                 </span>
                 <span
                   aria-hidden="true"
-                  className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full text-[0.7rem] font-bold ${
+                  className={`absolute right-2 top-2 flex h-5 w-5 sm:right-3 sm:top-3 items-center justify-center rounded-full text-[0.7rem] font-bold ${
                     selectedSpeed === pace.value
                       ? 'bg-orange-500 text-white'
                       : 'border border-white/25'
@@ -211,12 +211,12 @@ function RoundSetup({
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400">
-          Orthodox stance (left jab, right cross)
+          Stand about 2 m back, upper body in frame · Orthodox stance
         </p>
         <button
           disabled={!canStart}
           onClick={onStart}
-          className="action-btn action-btn-primary px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-50"
+          className="action-btn action-btn-primary shrink-0 whitespace-nowrap px-8 py-3 text-base disabled:cursor-not-allowed disabled:opacity-50"
         >
           Start Round
         </button>

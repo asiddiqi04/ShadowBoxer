@@ -44,11 +44,11 @@ function TrainingHud({ trainingState }) {
 
   return (
     <>
-      <div className="absolute left-3 top-3 rounded-xl bg-slate-950/70 px-2.5 py-1.5 backdrop-blur-md sm:rounded-2xl sm:px-4 sm:py-2 sm:left-4 sm:top-4">
-        <h2 className="display-title text-2xl leading-none tabular-nums text-white sm:text-5xl">
+      <div className="absolute left-3 top-3 rounded-2xl bg-slate-950/70 px-3 py-2 backdrop-blur-md sm:left-4 sm:top-4 sm:px-4 stage:top-[max(4.25rem,calc(env(safe-area-inset-top)+3.75rem))]">
+        <h2 className="display-title text-4xl leading-none tabular-nums text-white sm:text-5xl">
           {formatTime(timeLeft)}
         </h2>
-        <div className="mt-1 h-1 w-14 overflow-hidden rounded-full bg-white/15 sm:mt-1.5 sm:w-28">
+        <div className="mt-1.5 h-1 w-20 overflow-hidden rounded-full bg-white/15 sm:w-28">
           <div
             className="h-full rounded-full bg-gradient-to-r from-orange-400 to-rose-500 transition-[width] duration-1000"
             style={{ width: `${progress}%` }}
@@ -56,44 +56,44 @@ function TrainingHud({ trainingState }) {
         </div>
       </div>
 
-      <div className="absolute right-3 top-3 flex gap-2 rounded-xl bg-slate-950/70 px-2.5 py-1.5 text-center backdrop-blur-md sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-2 sm:right-4 sm:top-4">
+      <div className="absolute right-3 top-3 flex gap-3 rounded-2xl bg-slate-950/70 px-3 py-2 text-center backdrop-blur-md sm:right-4 sm:top-4 sm:px-4 stage:top-[max(4.25rem,calc(env(safe-area-inset-top)+3.75rem))]">
         <div>
-          <p className="display-title text-xl leading-none sm:text-3xl text-white">
+          <p className="display-title text-2xl leading-none sm:text-3xl text-white">
             {totalPunches}
           </p>
-          <p className="text-[0.5rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
+          <p className="text-[0.55rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
             Punches
           </p>
         </div>
         <div className="w-px bg-white/15" />
         <div>
-          <p className="display-title text-xl leading-none sm:text-3xl text-emerald-300">
+          <p className="display-title text-2xl leading-none sm:text-3xl text-emerald-300">
             {comboStats.succeeded}
           </p>
-          <p className="text-[0.5rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
+          <p className="text-[0.55rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
             Landed
           </p>
         </div>
         <div>
-          <p className="display-title text-xl leading-none sm:text-3xl text-rose-300">
+          <p className="display-title text-2xl leading-none sm:text-3xl text-rose-300">
             {comboStats.failed}
           </p>
-          <p className="text-[0.5rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
+          <p className="text-[0.55rem] uppercase tracking-[0.14em] text-slate-300 sm:text-[0.6rem]">
             Missed
           </p>
         </div>
       </div>
 
-      <div className="absolute inset-x-3 bottom-3 flex flex-col items-center gap-2 sm:inset-x-4 sm:bottom-4">
+      <div className="absolute inset-x-3 bottom-3 flex flex-col items-center gap-2 sm:inset-x-4 sm:bottom-4 stage:bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))]">
         {feedback && (
           <p
             key={lastPunchEvent.id}
-            className={`punch-feedback-pop rounded-full bg-slate-950/75 px-4 py-1 text-sm font-semibold backdrop-blur-md ${feedback.tone}`}
+            className={`punch-feedback-pop rounded-full bg-slate-950/75 px-4 py-1 text-base font-semibold sm:text-sm backdrop-blur-md ${feedback.tone}`}
           >
             {feedback.text}
           </p>
         )}
-        <div className="flex max-w-full flex-wrap justify-center gap-1.5 rounded-xl bg-slate-950/70 p-1.5 sm:gap-2 sm:rounded-2xl sm:p-2 backdrop-blur-md">
+        <div className="flex max-w-full flex-wrap justify-center gap-2 rounded-2xl bg-slate-950/70 p-2 backdrop-blur-md">
           {currentCombo.map((move, index) => {
             const state =
               index === missedIndex
@@ -106,7 +106,7 @@ function TrainingHud({ trainingState }) {
             return (
               <span
                 key={`${move}-${index}`}
-                className={`display-title rounded-lg border-2 px-2 py-0.5 text-lg tracking-[0.06em] transition sm:rounded-xl sm:px-5 sm:py-1 sm:text-4xl ${state}`}
+                className={`display-title rounded-xl border-2 px-3 py-1 text-4xl tracking-[0.06em] transition sm:px-5 ${state}`}
               >
                 {formatPunch(move)}
               </span>
