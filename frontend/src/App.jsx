@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import PoseDetector from './components/PoseDetector'
+import PoseDetector from './components/LazyPoseDetector'
 import TrainingHud from './components/TrainingHud'
 import Countdown from './components/Countdown'
 import RoundSetup from './components/RoundSetup'
@@ -18,6 +18,7 @@ import { usePunchSound } from './hooks/usePunchSound'
 import { hasMusicTrack, useRoundMusic } from './hooks/useRoundMusic'
 import { useAuth } from './hooks/useAuth'
 import { useGuestImport } from './hooks/useGuestImport'
+import { preloadTraining, preloadTrainingWhenIdle } from './lib/preloadTraining'
 
 const COUNTDOWN_SECONDS = 5
 
@@ -296,6 +297,12 @@ function App() {
     },
     [engine, playPunchSound],
   )
+  const onMenu = view === 'home' || view === 'history'
+  // Download the training code and pose models while the menu is open; the
+  // camera is still only requested once PoseDetector mounts.
+  useEffect(() => {
+    if (onMenu) return preloadTrainingWhenIdle()
+  }, [onMenu])
   const stats = useMemo(() => summarizeWorkouts(savedSessions), [savedSessions])
   const where = signedIn ? 'to your account' : 'in this browser'
   const failed = completions.filter((entry) => entry.status === 'error').length
@@ -352,13 +359,14 @@ function App() {
     void loadSavedSessions()
   }
 
-  if (view === 'home' || view === 'history')
+  if (onMenu)
     return (
       <div className="app-shell">
         <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
           {view === 'home' ? (
             <HomeScreen
               onStart={() => setView('train')}
+              onPrepare={preloadTraining}
               onOpenSettings={openSettings}
               onOpenHistory={() => setView('history')}
               stats={stats}

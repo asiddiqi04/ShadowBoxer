@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   copyFileSync,
@@ -12,26 +13,15 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  poseModelDirectory,
+  poseModels as models,
+} from '../frontend/src/lib/poseModelConfig.js'
 
 const root = fileURLToPath(
   new URL('../frontend/public/models/blazepose/', import.meta.url),
 )
 const cache = fileURLToPath(new URL('../.cache/pose-models/', import.meta.url))
-const models = [
-  {
-    name: 'detector',
-    variant: 'detector',
-    version: 1,
-    sha256: 'cfee06e1c5d4ffb7321ac30b81c906d998e0455c3d676e10bdd98f4a32495a42',
-  },
-  {
-    name: 'landmark-full',
-    variant: 'landmark-full',
-    version: 2,
-    sha256: '8a030c10045ce26583d470dc57f4f82df840033790611c82bb1e588bbb32f347',
-  },
-]
-
 const isComplete = (directory) => {
   try {
     const model = JSON.parse(
@@ -59,7 +49,8 @@ try {
   mkdirSync(root, { recursive: true })
   mkdirSync(cache, { recursive: true })
   for (const model of models) {
-    const destination = path.join(root, model.name)
+    // Versioned directory: its files can be served as immutable.
+    const destination = path.join(root, poseModelDirectory(model))
     const temporary = mkdtempSync(path.join(root, '.staging-'))
     try {
       const cachedArchive = path.join(cache, `${model.sha256}.tar.gz`)
@@ -108,6 +99,11 @@ try {
       rmSync(temporary, { recursive: true, force: true })
     }
   }
+  // Drop older model directories so builds only ship the current versions.
+  const current = new Set(models.map(poseModelDirectory))
+  for (const entry of readdirSync(root))
+    if (!current.has(entry))
+      rmSync(path.join(root, entry), { recursive: true, force: true })
   console.log('BlazePose models ready for local loading.')
 } catch (error) {
   console.error(

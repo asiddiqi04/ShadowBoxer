@@ -93,6 +93,7 @@ function GoogleSignIn({ auth }) {
 
 function HomeScreen({
   onStart,
+  onPrepare,
   onOpenSettings,
   onOpenHistory,
   stats,
@@ -135,6 +136,9 @@ function HomeScreen({
         <button
           className="action-btn action-btn-primary mt-8 px-10 py-4 text-base"
           onClick={onStart}
+          onPointerEnter={onPrepare}
+          onPointerDown={onPrepare}
+          onFocus={onPrepare}
         >
           Start training
         </button>
