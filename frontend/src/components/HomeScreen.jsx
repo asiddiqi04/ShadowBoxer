@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import LoadingBar from './LoadingBar'
+import { usePreloadProgress } from '../hooks/usePreloadProgress'
 
 function GearIcon() {
   return (
@@ -91,8 +93,24 @@ function GoogleSignIn({ auth }) {
   )
 }
 
+// Phones: show the training download so it's worth waiting a moment before starting.
+function TrainingPreload() {
+  const { phase, percent } = usePreloadProgress()
+  if (phase === 'skipped' || phase === 'error') return null
+  const done = phase === 'done'
+  return (
+    <div className="mt-6 w-full max-w-xs sm:hidden">
+      <LoadingBar
+        label={done ? 'Ready to train' : 'Preparing training'}
+        percent={done ? 100 : percent}
+      />
+    </div>
+  )
+}
+
 function HomeScreen({
   onStart,
+  onPrepare,
   onOpenSettings,
   onOpenHistory,
   stats,
@@ -135,9 +153,13 @@ function HomeScreen({
         <button
           className="action-btn action-btn-primary mt-8 px-10 py-4 text-base"
           onClick={onStart}
+          onPointerEnter={onPrepare}
+          onPointerDown={onPrepare}
+          onFocus={onPrepare}
         >
           Start training
         </button>
+        <TrainingPreload />
       </section>
 
       {importPrompt}

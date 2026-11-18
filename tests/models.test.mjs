@@ -22,8 +22,17 @@ test('a corrupt cached model fails the build preparation and cleans staging', as
       new URL('../scripts/prepare-pose-models.mjs', import.meta.url),
       path.join(root, 'scripts/prepare-pose-models.mjs'),
     )
+    await mkdir(path.join(root, 'frontend/src/lib'), { recursive: true })
+    await writeFile(
+      path.join(root, 'frontend/package.json'),
+      '{"type":"module"}',
+    )
+    await copyFile(
+      new URL('../frontend/src/lib/poseModelConfig.js', import.meta.url),
+      path.join(root, 'frontend/src/lib/poseModelConfig.js'),
+    )
     const source = await readFile(
-      new URL('../scripts/prepare-pose-models.mjs', import.meta.url),
+      new URL('../frontend/src/lib/poseModelConfig.js', import.meta.url),
       'utf8',
     )
     const hash = source.match(/sha256: '([a-f0-9]+)'/)[1]

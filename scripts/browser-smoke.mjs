@@ -4,6 +4,11 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serveBuild } from './static-server.mjs'
+import {
+  poseModelConfig,
+  poseModelDirectory,
+  poseModels,
+} from '../frontend/src/lib/poseModelConfig.js'
 
 const buildRoot = path.resolve(
   process.env.BUILD_DIR ??
@@ -105,6 +110,17 @@ try {
   await page.waitForTimeout(1000)
   assert.equal(await page.evaluate(() => window.__cameraRequests), 0)
   await expect(page.locator('video')).toHaveCount(0)
+  // While idle on the menu, the pose models download into the HTTP cache (no camera).
+  await expect
+    .poll(
+      () =>
+        requests.filter((r) => /\/models\/blazepose\/.+\.bin$/.test(r.url))
+          .length,
+      { timeout: 30000 },
+    )
+    .toBeGreaterThanOrEqual(4)
+  assert.equal(await page.evaluate(() => window.__cameraRequests), 0)
+  await expect(page.locator('video')).toHaveCount(0)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('switch', { name: 'Sound effects' }).uncheck()
   await page.getByRole('button', { name: 'Done', exact: true }).click()
@@ -115,7 +131,9 @@ try {
   ).not.toBeChecked()
   await page.getByRole('switch', { name: 'Sound effects' }).check()
   await page.keyboard.press('Escape')
-  console.log('PASS menu defers camera access; settings persist across reloads')
+  console.log(
+    'PASS menu defers camera access but preloads pose models; settings persist across reloads',
+  )
   await page
     .getByRole('button', { name: 'Start training', exact: true })
     .click()
@@ -149,25 +167,49 @@ try {
     home.headers()['referrer-policy'],
     'strict-origin-when-cross-origin',
   )
-  for (const model of ['detector', 'landmark-full']) {
-    const response = await context.request.get(
-      `${url}/models/blazepose/${model}/model.json`,
+  // Model files live under versioned directories and are cached as immutable.
+  const immutable = 'public, max-age=31536000, immutable'
+  const modelUrls = [
+    poseModelConfig.detectorModelUrl,
+    poseModelConfig.landmarkModelUrl,
+  ]
+  assert.deepEqual(
+    modelUrls,
+    poseModels.map(
+      (model) => `/models/blazepose/${poseModelDirectory(model)}/model.json`,
+    ),
+  )
+  for (const manifestUrl of modelUrls) {
+    assert.match(
+      manifestUrl,
+      /^\/models\/blazepose\/(detector|landmark-full)-v\d+-[0-9a-f]{12}\/model\.json$/,
     )
+    const response = await context.request.get(`${url}${manifestUrl}`)
     assert.equal(response.status(), 200)
+    assert.equal(response.headers()['cache-control'], immutable)
     const manifest = await response.json()
     for (const group of manifest.weightsManifest)
       for (const shard of group.paths) {
         const result = await context.request.get(
-          `${url}/models/blazepose/${model}/${shard}`,
+          `${url}${new URL(shard, `http://x${manifestUrl}`).pathname}`,
         )
         assert.equal(result.status(), 200)
+        assert.equal(result.headers()['cache-control'], immutable)
         assert.ok((await result.body()).length > 0)
       }
   }
-  assert.equal(
-    (await context.request.get(`${url}/models/missing.json`)).status(),
-    404,
-  )
+  // Unversioned paths from older builds are gone, and missing files stay 404s.
+  for (const missing of [
+    '/models/missing.json',
+    '/models/blazepose/detector/model.json',
+    '/models/blazepose/landmark-full/model.json',
+    modelUrls[0].replace('model.json', 'missing.bin'),
+  ])
+    assert.equal(
+      (await context.request.get(`${url}${missing}`)).status(),
+      404,
+      missing,
+    )
   assert.equal(
     (await context.request.get(`${url}/assets/missing.js`)).status(),
     404,
@@ -444,8 +486,12 @@ try {
   await ctx.close()
   console.log('PASS failed model download and retry; no API traffic or uploads')
   let bytes = 0
-  for (const model of ['detector', 'landmark-full']) {
-    const root = path.join(buildRoot, 'models/blazepose', model)
+  for (const model of poseModels) {
+    const root = path.join(
+      buildRoot,
+      'models/blazepose',
+      poseModelDirectory(model),
+    )
     const manifest = JSON.parse(await readFile(path.join(root, 'model.json')))
     for (const file of [
       'model.json',
