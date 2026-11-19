@@ -184,7 +184,7 @@ function PoseDetector({
       if (
         !document.hidden &&
         current.cameraReady &&
-        // The countdown runs inference without scoring: it warms up the model and shows the skeleton.
+        // The countdown runs inference without scoring: it warms up the model (and shows the dev skeleton).
         (current.isRunning ||
           current.previewing ||
           (import.meta.env.DEV && current.isRecording)) &&
@@ -219,7 +219,8 @@ function PoseDetector({
             !document.hidden &&
             live.current.cameraReady
           ) {
-            const canvas = canvasRef.current
+            // Skeleton overlay is a local dev tool: production skips the drawing entirely.
+            const canvas = import.meta.env.DEV ? canvasRef.current : null
             if (canvas) {
               // Resizing reallocates the canvas (slow on iOS): only do it when the video size changes.
               if (canvas.width !== video.videoWidth)
@@ -398,11 +399,13 @@ function PoseDetector({
             videoConstraints={videoConstraints}
             className="absolute inset-0 h-full w-full object-cover short:object-contain"
           />
-          <canvas
-            ref={canvasRef}
-            // Cropped exactly like the video (object-cover) so the skeleton stays aligned.
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover short:object-contain"
-          />
+          {import.meta.env.DEV && (
+            <canvas
+              ref={canvasRef}
+              // Cropped exactly like the video (object-cover) so the skeleton stays aligned.
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover short:object-contain"
+            />
+          )}
           {hud}
           {import.meta.env.DEV && showDebugOverlay && (
             <div className="absolute bottom-3 right-3 z-20 w-[20rem] max-w-[calc(100%-1.5rem)] rounded-xl border border-cyan-300/35 bg-slate-950/82 p-3 text-[11px] text-cyan-50 shadow-[0_12px_24px_rgba(8,47,73,0.35)] backdrop-blur-sm">

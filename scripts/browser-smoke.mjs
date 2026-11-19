@@ -149,6 +149,8 @@ try {
     0,
   )
   await expect(page.getByRole('link', { name: /^Download / })).toHaveCount(0)
+  // The keypoint/skeleton overlay is dev-only too.
+  await expect(page.locator('canvas')).toHaveCount(0)
   console.log(
     'PASS production build excludes recording/export implementation and debug controls',
   )
@@ -231,6 +233,7 @@ try {
   await context.setOffline(true)
   await startRound(page)
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()
+  await expect(page.locator('canvas')).toHaveCount(0)
   page.once('dialog', (dialog) => dialog.dismiss())
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()
