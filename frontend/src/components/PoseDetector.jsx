@@ -221,8 +221,11 @@ function PoseDetector({
           ) {
             const canvas = canvasRef.current
             if (canvas) {
-              canvas.width = video.videoWidth
-              canvas.height = video.videoHeight
+              // Resizing reallocates the canvas (slow on iOS): only do it when the video size changes.
+              if (canvas.width !== video.videoWidth)
+                canvas.width = video.videoWidth
+              if (canvas.height !== video.videoHeight)
+                canvas.height = video.videoHeight
               drawPose(
                 keypoints,
                 canvas.getContext('2d'),
@@ -307,7 +310,7 @@ function PoseDetector({
   const preload = usePreloadProgress()
 
   return (
-    <section className="flex flex-col gap-3 stage:fixed stage:inset-0 stage:z-0 stage:gap-2 stage:px-3 stage:pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
+    <section className="training-stage flex flex-col gap-3 stage:fixed stage:inset-0 stage:z-0 stage:gap-2 stage:px-3 stage:pt-[max(4rem,calc(env(safe-area-inset-top)+3.5rem))]">
       {import.meta.env.DEV && (
         <div className="flex flex-wrap items-center gap-2">
           <button
