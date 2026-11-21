@@ -356,6 +356,17 @@ body::before {
     }
   }
 
+  /* Phones: frosted-glass blur over the live camera is redrawn every video frame and
+     competes with pose detection for the GPU (very noticeable on iOS Safari).
+     The overlays keep their dark translucent backgrounds instead. */
+  @variant stage {
+    .training-stage,
+    .training-stage * {
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+    }
+  }
+
   @keyframes punch-feedback-pop {
     0% {
       opacity: 0.1;

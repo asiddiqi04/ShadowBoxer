@@ -24,28 +24,21 @@ for (const file of await readdir(path.join(buildRoot, 'assets'))) {
   )
 }
 const { server, url } = await serveBuild(buildRoot)
-// Resume also counts down; same clock jump.
-const resumeRound = async (p) => {
-  await p.getByRole('button', { name: 'Resume', exact: true }).click()
-  await expect(p.getByText('Get Ready', { exact: true })).toBeVisible()
+// Start Round and Resume open a 5-second countdown; jump the page clock past it when the test clock is installed.
+// A busy CI runner can miss the 5 s "Get Ready" window entirely, so accept either state before jumping.
+const passCountdown = async (p, button) => {
+  await p.getByRole('button', { name: button, exact: true }).click()
+  const live = p.getByText('Round Live', { exact: true })
+  await expect(p.getByText('Get Ready', { exact: true }).or(live)).toBeVisible({
+    timeout: 10000,
+  })
   await p.evaluate(() => {
     if (typeof window.__offset === 'number') window.__offset += 5000
   })
-  await expect(p.getByText('Round Live', { exact: true })).toBeVisible({
-    timeout: 10000,
-  })
+  await expect(live).toBeVisible({ timeout: 10000 })
 }
-// Start Round opens a 5-second countdown; jump the page clock past it when the test clock is installed.
-const startRound = async (p) => {
-  await p.getByRole('button', { name: 'Start Round', exact: true }).click()
-  await expect(p.getByText('Get Ready', { exact: true })).toBeVisible()
-  await p.evaluate(() => {
-    if (typeof window.__offset === 'number') window.__offset += 5000
-  })
-  await expect(p.getByText('Round Live', { exact: true })).toBeVisible({
-    timeout: 10000,
-  })
-}
+const resumeRound = (p) => passCountdown(p, 'Resume')
+const startRound = (p) => passCountdown(p, 'Start Round')
 let browser
 const requests = [],
   errors = []
@@ -149,6 +142,8 @@ try {
     0,
   )
   await expect(page.getByRole('link', { name: /^Download / })).toHaveCount(0)
+  // The keypoint/skeleton overlay is dev-only too.
+  await expect(page.locator('canvas')).toHaveCount(0)
   console.log(
     'PASS production build excludes recording/export implementation and debug controls',
   )
@@ -231,6 +226,7 @@ try {
   await context.setOffline(true)
   await startRound(page)
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()
+  await expect(page.locator('canvas')).toHaveCount(0)
   page.once('dialog', (dialog) => dialog.dismiss())
   await page.getByRole('button', { name: 'Reset', exact: true }).click()
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()

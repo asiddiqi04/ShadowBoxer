@@ -43,6 +43,8 @@ try {
     exact: true,
   })
   await expect(recordButton).toBeEnabled({ timeout: 90000 })
+  // Local builds keep the keypoint/skeleton overlay.
+  await expect(page.locator('canvas')).toHaveCount(1)
   await page.getByRole('button', { name: 'Debug Off', exact: true }).click()
   await expect(
     page.getByText('Classifier Debug', { exact: true }),
