@@ -35,7 +35,10 @@ const passCountdown = async (p, button) => {
   await p.evaluate(() => {
     if (typeof window.__offset === 'number') window.__offset += 5000
   })
-  await expect(live).toBeVisible({ timeout: 10000 })
+  // Headless Chrome runs BlazePose on software WebGL, which can starve the page's
+  // timers for many seconds (worst with two tabs inferring at once). The countdown
+  // is not cancelled, it just ticks late, so allow generous time to go live.
+  await expect(live).toBeVisible({ timeout: 45000 })
 }
 const resumeRound = (p) => passCountdown(p, 'Resume')
 const startRound = (p) => passCountdown(p, 'Start Round')
