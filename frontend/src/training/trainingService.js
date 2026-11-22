@@ -12,6 +12,7 @@ import {
   isValidSpeed,
 } from './speedProfiles.js'
 import { DEFAULT_ROUND_SECONDS, isValidRoundLength } from './roundLength.js'
+import { createSeededRandom, normalizeRoundConfig } from './roundConfig.js'
 
 export const ROUND_SECONDS = DEFAULT_ROUND_SECONDS
 const maxFrameHistory = 40
@@ -27,18 +28,27 @@ const createReadyState = (
   random = Math.random,
   speed = DEFAULT_SPEED,
   roundDurationSeconds = DEFAULT_ROUND_SECONDS,
+  config = null,
 ) => ({
   id: null,
   status: 'ready',
   speed,
   roundDurationSeconds,
+  config,
+  comboOptions: config
+    ? { punchSet: config.punchSet, comboLength: config.comboLength }
+    : null,
   startedAt: null,
   startedAtMs: null,
   endedAt: null,
   endedAtMs: null,
   pausedAtMs: null,
   pausedDurationMs: 0,
-  currentCombo: pickRandomCombo([], random),
+  currentCombo: pickRandomCombo(
+    [],
+    random,
+    config && { punchSet: config.punchSet, comboLength: config.comboLength },
+  ),
   comboStepIndex: 0,
   comboStats: initialComboStats(),
   comboResult: 'idle',
@@ -111,6 +121,9 @@ export const createTrainingService = ({
   includeDebug = false,
 } = {}) => {
   let state = createReadyState(random)
+  // Combos draw from this RNG. A round with a seed gets its own deterministic
+  // generator so two players with the same seed see the same combo sequence.
+  let comboRandom = random
   let generation = 0
   let completions = []
   const snapshot = () => serialize(state, now(), generation)
@@ -128,7 +141,15 @@ export const createTrainingService = ({
         elapsedMsForState(state, now()) / 1000,
       ),
       comboStats: { ...state.comboStats },
-      details: { speed: state.speed, punchCounts: { ...state.punchCounts } },
+      details: {
+        speed: state.speed,
+        punchCounts: { ...state.punchCounts },
+        ...(state.config && {
+          stance: state.config.stance,
+          punchSet: [...state.config.punchSet],
+          comboLength: { ...state.config.comboLength },
+        }),
+      },
     })
     completions.push(state.completedSession)
     return state.completedSession
@@ -159,7 +180,7 @@ export const createTrainingService = ({
   const refreshState = () => {
     const nowMs = now()
     if (state.status === 'running')
-      state = releaseComboIfReady(state, nowMs, random)
+      state = releaseComboIfReady(state, nowMs, comboRandom)
 
     const elapsedMs = elapsedMsForState(state, nowMs)
     if (
@@ -175,6 +196,7 @@ export const createTrainingService = ({
   const startRound = (
     speed = DEFAULT_SPEED,
     roundSeconds = DEFAULT_ROUND_SECONDS,
+    roundConfig = undefined,
   ) => {
     if (!isValidSpeed(speed)) {
       throw new TrainingError('Choose a round speed: form, casual, or intense.')
@@ -184,13 +206,20 @@ export const createTrainingService = ({
         'Choose a round length between 30 seconds and 10 minutes, in 30-second steps.',
       )
     }
+    const normalized =
+      roundConfig === undefined ? null : normalizeRoundConfig(roundConfig)
+    if (normalized && !normalized.ok)
+      throw new TrainingError(normalized.message)
     refreshState()
     if (state.status === 'running' || state.status === 'paused')
       return snapshot()
     const nowMs = now()
     generation += 1
+    const config = normalized?.value ?? null
+    comboRandom =
+      config?.seed != null ? createSeededRandom(config.seed) : random
     state = {
-      ...createReadyState(random, speed, roundSeconds),
+      ...createReadyState(comboRandom, speed, roundSeconds, config),
       id: createId(),
       status: 'running',
       startedAt: new Date(wallNow()).toISOString(),
@@ -241,7 +270,16 @@ export const createTrainingService = ({
   const resetRound = () => {
     refreshState()
     generation += 1
-    state = createReadyState(random, state.speed, state.roundDurationSeconds)
+    comboRandom =
+      state.config?.seed != null
+        ? createSeededRandom(state.config.seed)
+        : random
+    state = createReadyState(
+      comboRandom,
+      state.speed,
+      state.roundDurationSeconds,
+      state.config,
+    )
     return snapshot()
   }
 
@@ -284,6 +322,7 @@ export const createTrainingService = ({
       frameHistory,
       state.lastPunchBySide,
       state.speed,
+      state.config?.stance,
     )
 
     state = {
@@ -308,7 +347,7 @@ export const createTrainingService = ({
         nowMs,
         wallNowMs: wallNow(),
         id: createId(),
-        random,
+        random: comboRandom,
         lockDelayMs: getSpeedProfile(state.speed).comboDelayMs,
       })
       state = {

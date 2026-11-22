@@ -10,9 +10,9 @@ import ImportPrompt from './components/ImportPrompt'
 import * as browserHistory from './lib/sessionStorage'
 import { createCloudSessionStorage } from './lib/cloudSessionStorage'
 import { loadSettings, saveSettings } from './lib/settings'
+import { loadTrainingPrefs, saveTrainingPrefs } from './lib/trainingPrefs'
 import { summarizeWorkouts } from './lib/workoutStats'
 import { createTrainingService } from './training/trainingService'
-import { DEFAULT_ROUND_SECONDS } from './training/roundLength'
 import { createCompletionQueue } from './lib/completionQueue'
 import { usePunchSound } from './hooks/usePunchSound'
 import { hasMusicTrack, useRoundMusic } from './hooks/useRoundMusic'
@@ -53,9 +53,14 @@ function App() {
     createTrainingService({ includeDebug: import.meta.env.DEV }),
   )
   const [trainingState, setTrainingState] = useState(() => engine.getState())
-  const [selectedSpeed, setSelectedSpeed] = useState('casual')
-  const [roundSeconds, setRoundSeconds] = useState(DEFAULT_ROUND_SECONDS)
-  // Countdown before starting or resuming: { endsAt, action, speed, seconds }, else null.
+  // Pace, round length, stance and advanced options are remembered between visits.
+  const [trainingPrefs, setTrainingPrefs] = useState(loadTrainingPrefs)
+  const { speed: selectedSpeed, roundSeconds } = trainingPrefs
+  const updateTrainingPrefs = useCallback((next) => {
+    setTrainingPrefs(next)
+    saveTrainingPrefs(next)
+  }, [])
+  // Countdown before starting or resuming: { endsAt, action, speed, seconds, config }, else null.
   const [countdown, setCountdown] = useState(null)
   const [countdownLeft, setCountdownLeft] = useState(COUNTDOWN_SECONDS)
   const [trainingError, setTrainingError] = useState('')
@@ -212,6 +217,7 @@ function App() {
         action: 'start',
         speed: selectedSpeed,
         seconds: roundSeconds,
+        config: trainingPrefs,
       })
     }
   }
@@ -228,7 +234,11 @@ function App() {
         run(() =>
           countdown.action === 'resume'
             ? engine.resumeRound()
-            : engine.startRound(countdown.speed, countdown.seconds),
+            : engine.startRound(
+                countdown.speed,
+                countdown.seconds,
+                countdown.config,
+              ),
         )
         return true
       }
@@ -439,6 +449,7 @@ function App() {
           onPoseFrame={handlePoseFrame}
           frameIntervalMs={trainingState.round.frameIntervalMs}
           roundSpeed={trainingState.round.speed}
+          stance={trainingPrefs.stance}
           hud={
             countdown ? (
               <Countdown secondsLeft={countdownLeft} />
@@ -460,9 +471,18 @@ function App() {
                 <div className="m-auto w-full max-w-xl">
                   <RoundSetup
                     selectedSpeed={selectedSpeed}
-                    onSpeedChange={setSelectedSpeed}
+                    onSpeedChange={(speed) =>
+                      updateTrainingPrefs({ ...trainingPrefs, speed })
+                    }
                     roundSeconds={roundSeconds}
-                    onRoundSecondsChange={setRoundSeconds}
+                    onRoundSecondsChange={(seconds) =>
+                      updateTrainingPrefs({
+                        ...trainingPrefs,
+                        roundSeconds: seconds,
+                      })
+                    }
+                    trainingPrefs={trainingPrefs}
+                    onTrainingPrefsChange={updateTrainingPrefs}
                     onStart={handleRoundStart}
                     canStart={trackingReady}
                     lastRound={

@@ -8,6 +8,7 @@ const copyPoints = (points) =>
 export const createPoseRecording = ({
   id,
   startedAt,
+  stance = 'orthodox',
   originMs,
   videoTime,
   width,
@@ -22,7 +23,7 @@ export const createPoseRecording = ({
     schemaVersion: 1,
     id,
     startedAt,
-    stance: 'orthodox',
+    stance,
     model: { name: 'BlazePose', runtime: 'tfjs', modelType: 'full' },
     video: {
       width,

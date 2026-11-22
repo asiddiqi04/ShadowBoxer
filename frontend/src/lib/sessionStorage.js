@@ -1,8 +1,23 @@
 import { isValidSpeed } from '../training/speedProfiles.js'
+import {
+  isValidStance,
+  normalizeComboLength,
+  normalizePunchSet,
+} from '../training/roundConfig.js'
 import { isValidRoundLength } from '../training/roundLength.js'
 
 const isNonNegativeInteger = (value) =>
   Number.isSafeInteger(value) && value >= 0
+const hasValidRoundSettings = (details) => {
+  const present = [details.stance, details.punchSet, details.comboLength]
+  if (present.every((value) => value === undefined)) return true
+  return (
+    isValidStance(details.stance) &&
+    normalizePunchSet(details.punchSet) !== null &&
+    normalizeComboLength(details.comboLength) !== null
+  )
+}
+
 export const validateSession = (session) => {
   if (
     !session ||
@@ -26,7 +41,9 @@ export const validateSession = (session) => {
     !isValidSpeed(session.details?.speed) ||
     !['jab', 'cross', 'hook', 'uppercut'].every((key) =>
       isNonNegativeInteger(session.details?.punchCounts?.[key]),
-    )
+    ) ||
+    // Round settings are optional (older sessions have none), but all-or-nothing and valid.
+    !hasValidRoundSettings(session.details)
   ) {
     throw new Error(
       'Invalid workout summary. Your existing history has not been changed.',
@@ -47,6 +64,11 @@ export const validateSession = (session) => {
     },
     details: {
       speed: session.details.speed,
+      ...(session.details.stance !== undefined && {
+        stance: session.details.stance,
+        punchSet: normalizePunchSet(session.details.punchSet),
+        comboLength: normalizeComboLength(session.details.comboLength),
+      }),
       punchCounts: Object.fromEntries(
         ['jab', 'cross', 'hook', 'uppercut'].map((key) => [
           key,
