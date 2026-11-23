@@ -77,6 +77,7 @@ function PoseDetector({
   debugRows = [],
   frameIntervalMs = 50,
   roundSpeed = 'casual',
+  stance = 'orthodox',
   isRunning,
   previewing = false,
   onPoseFrame,
@@ -380,6 +381,7 @@ function PoseDetector({
         <PoseRecording
           webcamRef={webcamRef}
           captureRef={captureRef}
+          stance={stance}
           modelReady={cameraReady && modelStatus === 'Ready'}
           onRecordingChange={setIsRecording}
         />

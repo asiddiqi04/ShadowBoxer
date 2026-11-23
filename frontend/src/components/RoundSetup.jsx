@@ -1,4 +1,10 @@
 import { speedProfiles } from '../training/speedProfiles'
+import { punchTypes } from '../training/punchClassifier'
+import {
+  MAX_COMBO_LENGTH,
+  MIN_COMBO_LENGTH,
+  STANCES,
+} from '../training/roundConfig'
 import {
   MAX_ROUND_SECONDS,
   MIN_ROUND_SECONDS,
@@ -100,6 +106,176 @@ const paces = [
 const comboGap = (speed) =>
   `${speedProfiles[speed].comboDelayMs / 1000} s between combos`
 
+const punchLabels = {
+  jab: 'Jab',
+  cross: 'Cross',
+  hook: 'Hook',
+  uppercut: 'Uppercut',
+}
+
+const stanceBlurbs = {
+  orthodox: 'Left hand leads. Left = jab, right = cross.',
+  southpaw: 'Right hand leads. Right = jab, left = cross.',
+}
+
+const lengthOptions = Array.from(
+  { length: MAX_COMBO_LENGTH - MIN_COMBO_LENGTH + 1 },
+  (_, i) => MIN_COMBO_LENGTH + i,
+)
+
+const chip = (active) =>
+  `cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-semibold transition peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cyan-200 ${
+    active
+      ? 'border-orange-400 bg-orange-500/20 text-orange-100'
+      : 'border-white/15 text-slate-300 hover:border-white/35 hover:text-white'
+  }`
+
+function Stance({ value, onChange }) {
+  return (
+    <div className="mt-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <span id="stance-label" className="text-sm font-semibold text-white">
+          Stance
+        </span>
+        <div
+          role="radiogroup"
+          aria-labelledby="stance-label"
+          className="flex gap-1.5"
+        >
+          {STANCES.map((stance) => (
+            <label key={stance}>
+              <input
+                type="radio"
+                name="stance"
+                value={stance}
+                checked={value === stance}
+                onChange={() => onChange(stance)}
+                className="peer sr-only"
+              />
+              <span className={chip(value === stance)}>
+                {stance === 'southpaw' ? 'Southpaw' : 'Orthodox'}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-slate-400">{stanceBlurbs[value]}</p>
+    </div>
+  )
+}
+
+function AdvancedSettings({ prefs, onChange }) {
+  const { punchSet, comboLength } = prefs
+  const togglePunch = (type) => {
+    const next = punchSet.includes(type)
+      ? punchSet.filter((punch) => punch !== type)
+      : punchTypes.filter((punch) => punch === type || punchSet.includes(punch))
+    // At least one punch must stay selected.
+    if (next.length > 0) onChange({ ...prefs, punchSet: next })
+  }
+  const setLength = (key, raw) => {
+    const value = Number(raw)
+    const next = { ...comboLength, [key]: value }
+    // Keep min <= max by dragging the other end along.
+    if (key === 'min' && next.max < value) next.max = value
+    if (key === 'max' && next.min > value) next.min = value
+    onChange({ ...prefs, comboLength: next })
+  }
+  const select =
+    'rounded-lg border border-white/20 bg-slate-900 px-2 py-1.5 text-sm text-white'
+
+  return (
+    <details className="group mt-5 rounded-2xl border border-white/10 bg-white/[0.03] open:bg-white/[0.05]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-white [&::-webkit-details-marker]:hidden">
+        <span>Advanced settings</span>
+        <span className="flex items-center gap-2 text-xs font-normal text-slate-400">
+          <span className="group-open:hidden">
+            {punchSet.length === punchTypes.length
+              ? 'All punches'
+              : `${punchSet.length} of ${punchTypes.length} punches`}{' '}
+            ·{' '}
+            {comboLength.min === comboLength.max
+              ? comboLength.min
+              : `${comboLength.min}-${comboLength.max}`}{' '}
+            per combo
+          </span>
+          <span
+            aria-hidden="true"
+            className="text-base leading-none transition-transform group-open:rotate-180"
+          >
+            ▾
+          </span>
+        </span>
+      </summary>
+      <div className="space-y-5 px-4 pb-4">
+        <fieldset>
+          <legend className="text-xs uppercase tracking-[0.16em] text-slate-400">
+            Punches to practise
+          </legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {punchTypes.map((type) => {
+              const checked = punchSet.includes(type)
+              return (
+                <label key={type}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => togglePunch(type)}
+                    className="peer sr-only"
+                  />
+                  <span className={chip(checked)}>{punchLabels[type]}</span>
+                </label>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            {punchSet.length === 1
+              ? 'Single-punch drill. Pick more for combos.'
+              : 'At least one punch must stay selected.'}
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend className="text-xs uppercase tracking-[0.16em] text-slate-400">
+            Combo length
+          </legend>
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+            <select
+              aria-label="Shortest combo"
+              value={comboLength.min}
+              onChange={(event) => setLength('min', event.target.value)}
+              className={select}
+            >
+              {lengthOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span>to</span>
+            <select
+              aria-label="Longest combo"
+              value={comboLength.max}
+              onChange={(event) => setLength('max', event.target.value)}
+              className={select}
+            >
+              {lengthOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span>punches</span>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Default (2-3, all punches) uses the classic combo set.
+          </p>
+        </fieldset>
+      </div>
+    </details>
+  )
+}
+
 function SummaryStat({ label, value, tone = 'text-white' }) {
   return (
     <div className="rounded-xl bg-white/5 px-3 py-2 text-center">
@@ -117,6 +293,8 @@ function RoundSetup({
   onSpeedChange,
   roundSeconds,
   onRoundSecondsChange,
+  trainingPrefs,
+  onTrainingPrefsChange,
   onStart,
   canStart,
   lastRound,
@@ -209,9 +387,21 @@ function RoundSetup({
 
       <RoundLength value={roundSeconds} onChange={onRoundSecondsChange} />
 
+      <Stance
+        value={trainingPrefs.stance}
+        onChange={(stance) =>
+          onTrainingPrefsChange({ ...trainingPrefs, stance })
+        }
+      />
+
+      <AdvancedSettings
+        prefs={trainingPrefs}
+        onChange={onTrainingPrefsChange}
+      />
+
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-slate-400">
-          Stand about 2 m back, upper body in frame · Orthodox stance
+          Stand about 2 m back, upper body in frame
         </p>
         <button
           disabled={!canStart}

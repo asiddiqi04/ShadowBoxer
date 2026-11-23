@@ -1,3 +1,5 @@
+import { isDefaultComboOptions } from './roundConfig.js'
+
 export const comboLibrary = [
   ['jab', 'cross'],
   ['jab', 'cross', 'hook'],
@@ -8,15 +10,36 @@ export const comboLibrary = [
 
 export const comboToKey = (combo) => combo.join('-')
 
-export const pickRandomCombo = (previousCombo = [], random = Math.random) => {
-  const previousKey = comboToKey(previousCombo)
-  let candidate = comboLibrary[Math.floor(random() * comboLibrary.length)]
+const generateCombo = ({ punchSet, comboLength }, random) => {
+  const length =
+    comboLength.min +
+    Math.floor(random() * (comboLength.max - comboLength.min + 1))
+  return Array.from(
+    { length },
+    () => punchSet[Math.floor(random() * punchSet.length)],
+  )
+}
 
-  if (comboLibrary.length === 1) return [...candidate]
+// `options` is { punchSet, comboLength: { min, max } } from normalizeRoundConfig.
+// Default options use the curated library; anything else is generated from the
+// selected punches so a small punch set still gets plenty of variety.
+export const pickRandomCombo = (
+  previousCombo = [],
+  random = Math.random,
+  options = null,
+) => {
+  const previousKey = comboToKey(previousCombo)
+  const pick = isDefaultComboOptions(options)
+    ? () => comboLibrary[Math.floor(random() * comboLibrary.length)]
+    : () => generateCombo(options, random)
+  let candidate = pick()
+
+  if (isDefaultComboOptions(options) && comboLibrary.length === 1)
+    return [...candidate]
 
   let guard = 0
   while (comboToKey(candidate) === previousKey && guard < 12) {
-    candidate = comboLibrary[Math.floor(random() * comboLibrary.length)]
+    candidate = pick()
     guard += 1
   }
 
@@ -34,7 +57,11 @@ export const releaseComboIfReady = (state, nowMs, random = Math.random) => {
 
   return {
     ...state,
-    currentCombo: pickRandomCombo(state.currentCombo, random),
+    currentCombo: pickRandomCombo(
+      state.currentCombo,
+      random,
+      state.comboOptions,
+    ),
     comboStepIndex: 0,
     comboLockedUntil: null,
     comboResult: 'idle',

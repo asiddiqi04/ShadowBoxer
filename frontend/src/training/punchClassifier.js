@@ -248,6 +248,7 @@ export const scorePunchForSide = (
   history,
   lastPunchBySide,
   speed = 'casual',
+  stance = 'orthodox',
 ) => {
   if (history.length < 3) return { detection: null, debug: null }
   const current = history[history.length - 1]
@@ -389,7 +390,9 @@ export const scorePunchForSide = (
 
   // Pose labels are anatomical; mirroring the preview does not swap hands.
   // Orthodox stance: left lead hand = jab, right rear hand = cross.
-  const straightType = side === 'left' ? 'jab' : 'cross'
+  // Southpaw swaps the hands. Hooks and uppercuts do not depend on the side.
+  const leadSide = stance === 'southpaw' ? 'right' : 'left'
+  const straightType = side === leadSide ? 'jab' : 'cross'
   const motion = armMotion(side, history, lastPunchTime, profile)
   // A confirmed lateral arc with a bent world-space elbow takes precedence
   // over a straight-looking projection. Diagonal sweeps need a flatter
@@ -528,9 +531,26 @@ export const scorePunchForSide = (
   }
 }
 
-export const classifyPunch = (history, lastPunchBySide, speed = 'casual') => {
-  const left = scorePunchForSide('left', history, lastPunchBySide, speed)
-  const right = scorePunchForSide('right', history, lastPunchBySide, speed)
+export const classifyPunch = (
+  history,
+  lastPunchBySide,
+  speed = 'casual',
+  stance = 'orthodox',
+) => {
+  const left = scorePunchForSide(
+    'left',
+    history,
+    lastPunchBySide,
+    speed,
+    stance,
+  )
+  const right = scorePunchForSide(
+    'right',
+    history,
+    lastPunchBySide,
+    speed,
+    stance,
+  )
   const candidates = [left.detection, right.detection].filter(Boolean)
   const punch = candidates.length
     ? candidates.reduce((acc, cur) => (cur.score > acc.score ? cur : acc))

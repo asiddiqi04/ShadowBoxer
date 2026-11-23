@@ -24,6 +24,7 @@ function PoseRecording({
   webcamRef,
   captureRef,
   modelReady,
+  stance,
   onRecordingChange,
 }) {
   const recorderRef = useRef(null)
@@ -133,6 +134,7 @@ function PoseRecording({
         id,
         originMs,
         startedAt: new Date().toISOString(),
+        stance,
         videoTime: video.currentTime,
         width: video.videoWidth,
         height: video.videoHeight,

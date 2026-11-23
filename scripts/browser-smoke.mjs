@@ -35,7 +35,10 @@ const passCountdown = async (p, button) => {
   await p.evaluate(() => {
     if (typeof window.__offset === 'number') window.__offset += 5000
   })
-  await expect(live).toBeVisible({ timeout: 10000 })
+  // Headless Chrome runs BlazePose on software WebGL, which can starve the page's
+  // timers for many seconds (worst with two tabs inferring at once). The countdown
+  // is not cancelled, it just ticks late, so allow generous time to go live.
+  await expect(live).toBeVisible({ timeout: 45000 })
 }
 const resumeRound = (p) => passCountdown(p, 'Resume')
 const startRound = (p) => passCountdown(p, 'Start Round')
@@ -223,6 +226,51 @@ try {
   await expect(page.getByText('Round Ready', { exact: true })).toBeVisible()
   await expect(page.getByText('0 rounds saved', { exact: true })).toBeVisible()
   console.log('PASS countdown precedes the round and can be cancelled')
+  // Stance is a basic setting; punches and combo length sit in a collapsed menu.
+  const advanced = page.locator('details')
+  assert.equal(await advanced.evaluate((d) => d.open), false)
+  await page
+    .getByRole('radiogroup', { name: 'Stance' })
+    .getByText('Southpaw', { exact: true })
+    .click()
+  await expect(page.getByText(/Right hand leads/)).toBeVisible()
+  await page.getByRole('button', { name: '2 min', exact: true }).click()
+  await page.getByText('Advanced settings', { exact: true }).click()
+  await page.getByText('Uppercut', { exact: true }).click()
+  for (const name of ['Jab', 'Cross', 'Hook'])
+    await page.getByText(name, { exact: true }).click()
+  // Hook is the last selected punch, so it cannot be turned off.
+  assert.equal(
+    await page.getByRole('checkbox', { name: 'Hook' }).isChecked(),
+    true,
+  )
+  await page.reload()
+  await page
+    .getByRole('button', { name: 'Start training', exact: true })
+    .click()
+  await expect(
+    page.getByRole('button', { name: 'Start Round', exact: true }),
+  ).toBeEnabled({ timeout: 90000 })
+  assert.equal(
+    await page.getByRole('radio', { name: 'Southpaw' }).isChecked(),
+    true,
+  )
+  await expect(page.getByText('2:00', { exact: true })).toBeVisible()
+  await expect(page.getByText(/1 of 4 punches/)).toBeVisible()
+  // Restore defaults: later checks assume a 3-minute round.
+  await page
+    .getByRole('radiogroup', { name: 'Stance' })
+    .getByText('Orthodox', { exact: true })
+    .click()
+  await page.getByRole('button', { name: '3 min', exact: true }).click()
+  await page.getByText('Advanced settings', { exact: true }).click()
+  for (const name of ['Jab', 'Cross', 'Uppercut'])
+    await page.getByText(name, { exact: true }).click()
+  await expect(page.getByText(/All punches/)).toHaveCount(1)
+  await page.getByText('Advanced settings', { exact: true }).click()
+  console.log(
+    'PASS stance in basic setup, collapsible advanced settings, round prefs persist',
+  )
   await context.setOffline(true)
   await startRound(page)
   await expect(page.getByText('Round Live', { exact: true })).toBeVisible()

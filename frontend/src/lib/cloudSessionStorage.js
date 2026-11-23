@@ -2,7 +2,7 @@ import { validateSession } from './sessionStorage.js'
 
 const TABLE = 'workout_sessions'
 const COLUMNS =
-  'id, schema_version, started_at, ended_at, round_duration_seconds, duration_seconds, speed, combos_succeeded, combos_failed, combos_total, jabs, crosses, hooks, uppercuts'
+  'id, schema_version, started_at, ended_at, round_duration_seconds, duration_seconds, speed, combos_succeeded, combos_failed, combos_total, jabs, crosses, hooks, uppercuts, stance, punch_set, combo_length_min, combo_length_max'
 
 export const toRow = (session) => {
   const value = validateSession(session)
@@ -21,6 +21,10 @@ export const toRow = (session) => {
     crosses: value.details.punchCounts.cross,
     hooks: value.details.punchCounts.hook,
     uppercuts: value.details.punchCounts.uppercut,
+    stance: value.details.stance ?? null,
+    punch_set: value.details.punchSet ?? null,
+    combo_length_min: value.details.comboLength?.min ?? null,
+    combo_length_max: value.details.comboLength?.max ?? null,
   }
 }
 
@@ -40,6 +44,14 @@ export const fromRow = (row) =>
     },
     details: {
       speed: row.speed,
+      ...(row.stance && {
+        stance: row.stance,
+        punchSet: row.punch_set,
+        comboLength: {
+          min: row.combo_length_min,
+          max: row.combo_length_max,
+        },
+      }),
       punchCounts: {
         jab: row.jabs,
         cross: row.crosses,
