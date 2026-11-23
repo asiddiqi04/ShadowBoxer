@@ -54,7 +54,12 @@ try {
     0,
   )
   await recordButton.click()
-  await page.waitForTimeout(5000)
+  // The first inference compiles WebGL shaders, which can take well over 5 s on
+  // headless software rendering. Wait for a sample, then record a little more.
+  await expect(page.getByText(/· [1-9]\d* pose samples/)).toBeVisible({
+    timeout: 60000,
+  })
+  await page.waitForTimeout(2000)
   await page
     .getByRole('button', { name: 'Stop recording', exact: true })
     .click()
